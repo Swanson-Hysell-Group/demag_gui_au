@@ -178,24 +178,20 @@ enter naming convention here: """)
 if __name__=="__main__":
     for flg in ['-h', '--help']:
         if flg in sys.argv:
-            # sys.argv.remove(flg)
             help(main); sys.exit()
     for flg in ['-dx', '--dropbox']:
         if flg in sys.argv:
-            # sys.argv.remove(flg)
             dropbox = True; break
         else:
             dropbox = False
     for flg in ['-fs', '--force_rewrite_sam_path']:
         if flg in sys.argv:
             fs = sys.argv[sys.argv.index(flg)+1]; break
-            # sys.argv.remove(flg)
         else:
             fs = None
     for flg in ['-fn', '--force_rewrite_nc']:
         if flg in sys.argv:
             fn = sys.argv[sys.argv.index(flg)+1]; break
-            # sys.argv.remove(flg)
         else:
             fn = None
     if len(sys.argv)==1:

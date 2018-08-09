@@ -1,4 +1,23 @@
+################################################################################
+#                                 Demag GUI AU                                 #
+################################################################################
+
+# ignore local .inp files (copied into repo during setup)
+*.inp
+
+# also ignore MagIC files created locally
+*.magic
+*measurements.txt
+*samples.txt
+*locations.txt
+*sites.txt
+*specimens.txt
+
 tags
+
+################################################################################
+#                                    Python                                    #
+################################################################################
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
