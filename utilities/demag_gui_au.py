@@ -14,6 +14,7 @@ from wx import App, CallAfter, Timer, EVT_TIMER, ID_ANY
 import wx
 from functools import reduce
 import pmagpy.pmag as pmag
+import pdb
 global CURRENT_VERSION
 CURRENT_VERSION = pmag.get_version()
 
@@ -27,6 +28,7 @@ class Demag_GUIAU(dgl.Demag_GUI):
             self.WD = os.getcwd()
         else:
             self.WD = WD
+        self.delete_magic_files(self.WD)
         self.data_model = data_model
         self.inp_file = inp_file
         magic_files = {}
@@ -42,6 +44,12 @@ class Demag_GUIAU(dgl.Demag_GUI):
             )
         except ValueError:
             raise ValueError("Data model you entered is not a number")
+        self.menubar = super(Demag_GUIAU, self).GetMenuBar()
+        menu_file = self.menubar.GetMenu(0)
+        m_read_inp = menu_file.Append(-1, "Read .inp file\tCtrl-I","")
+        self.Bind(wx.EVT_MENU, self.on_menu_pick_read_inp, m_read_inp)
+        self.menubar.Refresh()
+
         self.timer = Timer(self, ID_ANY)
         self.timer.Start(delay_time*1000)
         self.Bind(EVT_TIMER, self.on_timer)
@@ -296,6 +304,7 @@ class Demag_GUIAU(dgl.Demag_GUI):
         inp_file.close()
         out_file = open(inp_file_name, "w")
         out_file.write(new_inp_file)
+        # out_file.close()
 
         return update_data
 
@@ -340,13 +349,24 @@ class Demag_GUIAU(dgl.Demag_GUI):
                 combine_magic(magic_files['sites'],
                               os.path.join(WD, "er_sites.txt"))
 
+
+
+    def delete_magic_files(self, WD, data_model=3.0):
+        compiled_table_names = ['measurements', 'specimens', 'samples',
+                            'sites', 'locations', 'contribution',
+                            'criteria', 'ages', 'images']
+        for mtable in compiled_table_names:
+            if os.path.exists(os.path.join(WD,mtable+'.txt')):
+                os.remove(os.path.join(WD,mtable+'.txt'))
+                print("Removing %s"%(os.path.join(WD,mtable+'.txt')))
+
     def pick_inp(self, parent, WD):
         dlg = wx.FileDialog(
             parent, message="choose .inp file",
             defaultDir=WD,
             defaultFile="magic.inp",
             wildcard="*.inp",
-            style=wx.OPEN
+            style=wx.FD_OPEN
         )
 
         if dlg.ShowModal() == wx.ID_OK:
@@ -356,6 +376,66 @@ class Demag_GUIAU(dgl.Demag_GUI):
         dlg.Destroy()
 
         return inp_file_name
+
+    def on_menu_pick_read_inp(self, event):
+        self.timer.Stop()
+        inp_file_name = self.pick_inp(self,self.WD)
+        if inp_file_name == None: return
+        self.inp_file = inp_file_name
+
+        self.delete_magic_files(self.WD)
+        super().clear_high_level_pars()
+        super().clear_boxes()
+        super().clear_interpretations()
+        magic_files = {}
+        self.read_inp(self.WD, self.inp_file, magic_files, self.data_model)
+        # print(magic_files)
+        self.combine_magic_files(self.WD, magic_files, self.data_model)
+        pdb.set_trace()
+        super().reset_backend(warn_user=False, reset_interps=False)
+        # self.reset_backend(warn_user=False, reset_interps=False)
+        # self.calculate_high_levels_data()
+        # self.update_selection()
+        # self.recalculate_current_specimen_interpreatations()
+        # self.reset_backend(warn_user=False, reset_interps=False)
+
+        self.timer = Timer(self, ID_ANY)
+        self.timer.Start(self.delay_time*1000)
+        self.Bind(EVT_TIMER, self.on_timer)
+        # self.update_high_level_stats()
+
+"""
+update_GUI_with_new_interpretation
+
+
+
+        mb = self.GetMenuBar()
+        am = mb.GetMenu(2)
+
+        self.menubar = wx.MenuBar()
+
+        #-----------------
+        # File Menu
+        #-----------------
+
+        menu_file = wx.Menu()
+
+
+        m_change_WD = menu_file.Append(-1, "Change Working Directory\tCtrl-W","")
+        self.Bind(wx.EVT_MENU, self.on_menu_change_working_directory, m_change_WD)
+
+
+        #self.menubar.Append(menu_preferences, "& Preferences")
+        self.menubar.Append(menu_file, "&File")
+        self.menubar.Append(menu_edit, "&Edit")
+        self.menubar.Append(menu_Analysis, "&Analysis")
+        self.menubar.Append(menu_Tools, "&Tools")
+        self.menubar.Append(menu_Help, "&Help")
+        #self.menubar.Append(menu_Plot, "&Plot")
+        #self.menubar.Append(menu_results_table, "&Table")
+        #self.menubar.Append(menu_MagIC, "&MagIC")
+        self.SetMenuBar(self.menubar)
+"""
 
 
 '''
@@ -378,7 +458,7 @@ some old code from original __init__:
 '''
 
 
-def start(inp_file=None, delay_time=1, vocal=False, data_model=3):
+def start(WD=None, inp_file=None, delay_time=1, vocal=False, data_model=3):
     global cit_magic
 
     if int(float(data_model)) == 3:
@@ -386,7 +466,7 @@ def start(inp_file=None, delay_time=1, vocal=False, data_model=3):
     else:
         cit_magic = cit_magic2
     app = App()
-    dg = Demag_GUIAU(None, not vocal, inp_file, delay_time, float(data_model))
+    dg = Demag_GUIAU(WD, not vocal, inp_file, delay_time, float(data_model))
     # dg = Demag_GUIAU(None, vocal, inp_file, delay_time, float(data_model))
     app.frame = dg
     app.frame.Center()
@@ -396,6 +476,10 @@ def start(inp_file=None, delay_time=1, vocal=False, data_model=3):
 
 def main():
     kwargs = {}
+
+    if "-WD" in sys.argv:
+        wd_ind = sys.argv.index("-WD")
+        kwargs['WD'] = sys.argv[wd_ind+1]
 
     if "-i" in sys.argv:
         inp_ind = sys.argv.index("-i")
@@ -421,7 +505,6 @@ def main():
         dm_index = sys.argv.index("--data_model")
         kwargs['data_model'] = sys.argv[dm_index+1]
     start(**kwargs)
-
 
 if __name__ == "__main__":
     main()

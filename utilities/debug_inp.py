@@ -181,17 +181,25 @@ if __name__=="__main__":
             help(main); sys.exit()
     for flg in ['-dx', '--dropbox']:
         if flg in sys.argv:
-            dropbox = True; break
+            dropbox = True
+            sys.argv.remove(flg)
+            break
         else:
             dropbox = False
     for flg in ['-fs', '--force_rewrite_sam_path']:
         if flg in sys.argv:
-            fs = sys.argv[sys.argv.index(flg)+1]; break
+            fs = sys.argv[sys.argv.index(flg)+1]
+            sys.argv.remove(fs)
+            sys.argv.remove(flg)
+            break
         else:
             fs = None
     for flg in ['-fn', '--force_rewrite_nc']:
         if flg in sys.argv:
-            fn = sys.argv[sys.argv.index(flg)+1]; break
+            fn = sys.argv[sys.argv.index(flg)+1]
+            sys.argv.remove(fn)
+            sys.argv.remove(flg)
+            break
         else:
             fn = None
     if len(sys.argv)==1:

@@ -4,11 +4,7 @@
 import sys
 import os
 from setuptools import setup, find_packages
-from utilities.get_all_inp_files import find_dropbox
-try:
-    from . import user
-except:
-    pass
+from utilities.find_dropbox import find_dropbox
 
 def shortpath(abspath):
     return abspath.replace(os.path.expanduser('~') + os.sep, '~/', 1)
