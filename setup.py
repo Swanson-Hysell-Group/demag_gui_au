@@ -65,7 +65,7 @@ def main(dropbox=False):
     for vals in (("Base path to search for data files:", shortpath(demaggui_user["data_dir"])),
             ("MagIC file output directory:", shortpath(demaggui_user["magic_out"])),
             ("INP directory:", shortpath(demaggui_user["inp_dir"]))):
-        print('{0:<35} {1:>45}'.format(*vals))
+        print('{0:<35} {1:<45}'.format(*vals))
     print('')
 
 if __name__ == "__main__":
