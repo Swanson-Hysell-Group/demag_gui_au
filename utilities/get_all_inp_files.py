@@ -24,14 +24,10 @@ OPTIONS
 import os
 import sys
 import shutil
-# import argparse
-# import pickle
-
-# set up argparser for cli
-# parser = argparse.ArgumentParser(description="Retrieve all .inp files within the directory WD")
-
-# parser.add_argument("-WD")
-# parser.add_argument("-dx", "--dropbox", action='store_true')
+try:
+    import json
+except:
+    pass
 
 # TODO: For testing purposes --- but should obviously not be hard coded
 # like this <08-08-18, Luke Fairchild> #
@@ -47,16 +43,33 @@ def find_dropbox():
     Path to Dropbox
 
     """
-    if os.path.isfile(os.path.expanduser("~/.dropbox/info.json")):
-        drpbx_info_file = os.path.expanduser("~/.dropbox/info.json")
+    if os.path.isfile(os.path.expanduser(os.path.join("~", ".dropbox", "info.json"))):
+        drpbx_info_file = os.path.expanduser(os.path.join("~", ".dropbox", "info.json"))
         drpbx_info = open(drpbx_info_file, 'r')
-        drpbx_dict = drpbx_info.read().splitlines()[0]
+        drpbx_json = drpbx_info.read()
         drpbx_info.close()
-        drpbx_dict=dict(eval(drpbx_dict.replace('false','False').replace('true','True')))
-        drpbx_path=drpbx_dict['personal']['path']
+        try:
+            drpbx_dict = json.loads(drpbx_json)
+        except:
+            drpbx_dict = dict(eval(drpbx_json.replace('false','False').replace('true','True')))
+        finally:
+            drpbx_acts = list(drpbx_dict.keys())
+            if len(drpbx_acts)>1:
+                print("Found multiple Dropbox accounts:")
+                for i,j in enumerate(drpbx_acts):
+                    print("[", i,"]", j)
+                n = input("Which account to use? [index number]: ")
+                drpbx_dict = drpbx_dict[drpbx_acts[n]]
+            else:
+                drpbx_dict = drpbx_dict[drpbx_acts[0]]
+            drpbx_path=os.path.abspath(drpbx_dict['path'])
+
     else:
-        drpbx_path = input("Option '-dropbox' given but there was a problem finding your Dropbox folder.\n"
-                "Please provide the path to your Dropbox folder here (press Enter to skip): ")
+        drpbx_path = input("""
+        There was a problem finding your Dropbox folder.
+        Please provide the path to your Dropbox folder here (press Enter to skip): )
+        """)
+
     if os.path.isdir(os.path.join(drpbx_path,"Hargraves_Data")):
         drpbx_path = os.path.join(drpbx_path,"Hargraves_Data")
     return drpbx_path

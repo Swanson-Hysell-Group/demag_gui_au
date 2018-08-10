@@ -1,6 +1,6 @@
 import os,sys
 # import programs.demag_gui as dgl
-import demag_gui_autoupdate as dgl
+import utilities.demag_gui_au as dgl
 from wx import App
 
 def combine_inp(sd, out_path='DemagGUI_AU/data/inp_files/'):

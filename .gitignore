@@ -2,16 +2,11 @@
 #                                 Demag GUI AU                                 #
 ################################################################################
 
-# ignore local .inp files (copied into repo during setup)
-*.inp
+# .inp and MagIC files
+data/
 
-# also ignore MagIC files created locally
-*.magic
-*measurements.txt
-*samples.txt
-*locations.txt
-*sites.txt
-*specimens.txt
+# config directory (created by setup.py)
+config/
 
 tags
 
