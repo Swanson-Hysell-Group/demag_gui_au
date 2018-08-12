@@ -1,48 +1,103 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+"""
+NAME:
+    debug_inp
+
+DESCRIPTION:
+    debugs and fixes with user input .inp format files of CIT (sam file) type data.
+
+SYNTAX:
+    ~$ python debug_inp.py $INP_FILE
+
+FLAGS:
+    -h, --help:
+        prints this help message
+    -dx, --dropbox:
+        Prioritize user's Dropbox folder when searching/debugging sam file paths;
+        the module will attempt to locate the Dropbox folder automatically.
+# TODO: flag names/arguments need fixing:  <10-08-18>, Luke Fairchild #
+    --sam_path:
+        forcibly rewrite the path to the .sam file
+    -fn, --force_rewrite_nc INT:
+        Forcibly overwrite the naming convention of the .inp file.
+        Argument should be a number according to the MagIC convention given below:
+
+        [1] XXXXY: where XXXX is an arbitrary length site designation and Y
+            is the single character sample designation.  e.g., TG001a is the
+            first sample from site TG001.    [default]
+        [2] XXXX-YY: YY sample from site XXXX (XXX, YY of arbitary length)
+        [3] XXXX.YY: YY sample from site XXXX (XXX, YY of arbitary length)
+        [4-Z] XXXX[YYY]:  YYY is sample designation with Z characters from site XXX
+        [5] site name = sample name
+        [6] site name entered in site_name column in the orient.txt format input file  -- NOT CURRENTLY SUPPORTED
+        [7-Z] [XXX]YYY:  XXX is site designation with Z characters from samples  XXXYYY
+
+
+"""
+
 import sys,os
 import pandas as pd
 import pmagpy.controlled_vocabularies2 as cv
 from functools import reduce
+try: # get path names if set
+    import dmgui_au.config.user as user
+    path_conf = user.demaggui_user
+    data_dir = path_conf['data_dir']
+    inp_dir = path_conf['inp_dir']
+    data_output_path = path_conf['magic_out']
+    global data_dir, inp_dir, data_output_path
+    usr_configs_read = True
+except:
+    warnings.warn("Local paths used by this package have not been defined; please run the script setup.py")
+    usr_configs_read = False
 
-def main(inp_file, drpbx = False, force_rewrite_sam_path = None, force_rewrite_nc = None, force_rewrite_tc = None):
+
+def debug_inp(inp_file, drpbx = False, **kwargs):
+
+    """Fixes .inp files
+
+    Parameters
+    ----------
+    inp_file : filename
+        Name of .inp file; can be relative or absolute path.
+
+    drpbx : bool, optional
+        When searching for the correct paths to data files,
+        prioritize user Dropbox folder. If you have already
+        specified your data directory in the global configuration
+        (with setup.py) this does nothing.
+
+    **kwargs : optional
+        Manually overwrite certain fields of the .inp file.
+        Possible fields are abbreviations of the actual header name.
+            ----------------------------
+            kwargs      ||    inp fields
+            ----------------------------
+            sam_path          sam_path
+            magic_codes       field_magic_codes
+            loc               location
+            nc                naming_convention
+            term              num_terminal_char
+            no_ave            dont_average_replicate_measurements
+            peak_AF           peak_AF
+            time              time_stamp
+
+
+    Returns
+    -------
+    New .inp file
+
     """
-    debugs and fixes with user input .inp format files of CIT (sam file) type data.
 
-    SYNTAX:
-        ~$ python debug_inp.py $INP_FILE
-
-    FLAGS:
-        -h, --help:
-            prints this help message
-        -dx, --dropbox:
-            Prioritize user's Dropbox folder when searching/debugging sam file paths;
-            the module will attempt to locate the Dropbox folder automatically.
-        -fs, --force_rewrite_sam_path STR:
-            forcibly rewrite the path to the .sam file
-        -fn, --force_rewrite_nc INT:
-            Forcibly overwrite the naming convention of the .inp file.
-            Argument should be a number according to the MagIC convention given below:
-
-            [1] XXXXY: where XXXX is an arbitrary length site designation and Y
-                is the single character sample designation.  e.g., TG001a is the
-                first sample from site TG001.    [default]
-            [2] XXXX-YY: YY sample from site XXXX (XXX, YY of arbitary length)
-            [3] XXXX.YY: YY sample from site XXXX (XXX, YY of arbitary length)
-            [4-Z] XXXX[YYY]:  YYY is sample designation with Z characters from site XXX
-            [5] site name = sample name
-            [6] site name entered in site_name column in the orient.txt format input file  -- NOT CURRENTLY SUPPORTED
-            [7-Z] [XXX]YYY:  XXX is site designation with Z characters from samples  XXXYYY
-
-
-    """
+    if "~" in inp_file: inp_file = os.path.expanduser(inp_file)
     if not os.path.isfile(inp_file):
         print("%s is not a valid file path, aborting"%inp_file); return
     inp_directory,inp_file_name = os.path.split(inp_file)
     if inp_directory=='': inp_directory = '.'
     inp_file = os.path.abspath(inp_file)
-    print("Running on %s and changing cwd to %s\n"%(inp_file_name,inp_directory))
+    print("Running on %s and changing CWD to %s\n"%(inp_file_name,inp_directory))
     os.chdir(inp_directory)
 
     inpf = open(inp_file,'r')
@@ -50,10 +105,13 @@ def main(inp_file, drpbx = False, force_rewrite_sam_path = None, force_rewrite_n
     header,sam_path,name_con,num_term_char = inpl[1].split('\t'),'','',''
     for line in inpl[2:]:
         if len(line.split('\t')) != len(header):
-            print("\nPlease check file %s --- some lines have different length entries than the header.\n\n"
-            "You will have to check this manually as this function is not supported yet. Aborting..."%inp_file)
+            print("""
+            Some lines in file -- %s -- have different length entries than the header.
+
+            You will have to check this manually as this function is not supported yet. Aborting...
+
+            """%inp_file)
             return
-    # if inpl[0]=='CIT' and not all([h in header for h in ['sam_path','naming_convention','num_terminal_char']]):
     if inpl[0]=='CIT':
         if 'sam_path' not in header:
             sam_path = input("No .sam file name or path in .inp file %s, please provide a path: ")
@@ -205,4 +263,4 @@ if __name__=="__main__":
     if len(sys.argv)==1:
         print("program needs a .inp file to debug, aborting"); sys.exit()
     # print("Running with options drpbx={}, force_rewrite_sam_path = {}, force_rewrite_nc = {}".format(dropbox,fs,fn))
-    main(sys.argv[1], drpbx=dropbox, force_rewrite_sam_path = fs, force_rewrite_nc = fn)
+    debug_inp(sys.argv[1], drpbx=dropbox, force_rewrite_sam_path = fs, force_rewrite_nc = fn)

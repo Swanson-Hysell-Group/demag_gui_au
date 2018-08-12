@@ -26,21 +26,30 @@ import sys
 import shutil
 import warnings
 from utilities import find_dropbox
-try:
-    from utilities import data_output_path, data_dir, inp_dir
+try: # get path names if set
+    import dmgui_au.config.user as user
+    path_conf = user.demaggui_user
+    data_dir = path_conf['data_dir']
+    inp_dir = path_conf['inp_dir']
+    data_output_path = path_conf['magic_out']
+    global data_dir, inp_dir, data_output_path
     usr_configs_read = True
 except:
     warnings.warn("Local paths used by this package have not been defined; please run the script setup.py")
     usr_configs_read = False
 
-
-def get_all_inp_files(WD='.'):
+def get_all_inp_files(WD = '.', output_path = '.', inp_dir = '.'):
     """
     Retrieve all .inp files within the directory WD
 
     Parameters
     ----------
-    WD : directory to search; default is current directory
+    WD : path
+        directory to search; default is current directory
+    output_path : path
+        primary write directory
+    inp_dir : path
+        designated directory for copying .inp files
 
     Returns
     -------
@@ -48,14 +57,10 @@ def get_all_inp_files(WD='.'):
 
     """
 
-    global data_output_path, data_dir, inp_dir
-
     if '~' in WD:
         WD = os.path.expanduser(WD)
     if not os.path.isdir(WD):
         raise NameError("directory %s does not exist, aborting" % WD)
-        # print("directory %s does not exist, aborting" % WD)
-        # return []
 
     try:
         all_inp_files = []
@@ -65,11 +70,11 @@ def get_all_inp_files(WD='.'):
                 all_inp_files += get_all_inp_files(os.path.join(root, d))
 
             for f in files:
-                if f.endswith(".inp") and f not in map(
+                if f.endswith(".inp") and not f.startswith(".") and f not in map(
                         lambda x: os.path.split(x)[1], all_inp_files):
                     all_inp_files.append(os.path.join(root, f))
 
-        out_file = open(os.path.join(data_output_path, "all_inp_files.txt"), "w")
+        out_file = open(os.path.join(output_path, "all_inp_files.txt"), "w")
         for inp in all_inp_files:
             out_file.write(inp+'\n')
             inp_copy = shutil.copy(inp, inp_dir)
@@ -87,7 +92,7 @@ if __name__ == "__main__":
         if flg in sys.argv:
             help(__name__); sys.exit()
     if usr_configs_read and len(sys.argv)==1:
-        get_all_inp_files(data_dir)
+        get_all_inp_files(data_dir, data_output_path, inp_dir)
     if '-WD' in sys.argv:
         WD = sys.argv[sys.argv.index('-WD')+1]
     else:
