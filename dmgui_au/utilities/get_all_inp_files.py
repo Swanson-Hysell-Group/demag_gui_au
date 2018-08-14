@@ -26,13 +26,13 @@ import sys
 import shutil
 import warnings
 from utilities import find_dropbox
+global data_dir, inp_dir, data_output_path, usr_configs_read
 try: # get path names if set
     import dmgui_au.config.user as user
     path_conf = user.demaggui_user
     data_dir = path_conf['data_dir']
     inp_dir = path_conf['inp_dir']
     data_output_path = path_conf['magic_out']
-    global data_dir, inp_dir, data_output_path
     usr_configs_read = True
 except:
     warnings.warn("Local paths used by this package have not been defined; please run the script setup.py")
