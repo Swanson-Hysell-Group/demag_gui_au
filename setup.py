@@ -4,25 +4,43 @@
 import sys
 import os
 from setuptools import setup, find_packages
-from utilities.find_dropbox import find_dropbox
+from dmgui_au.utilities import find_dropbox, shortpath
 
-def shortpath(abspath):
-    return abspath.replace(os.path.expanduser('~') + os.sep, '~/', 1)
+"""
+TODO:
+    script currently only takes care of assigning global pathnames used by the dmgui_au package
+    It should eventually implement:
+        1) get_all_inp_files
+        2) debug all inp file paths (and possibly other values if user chooses)
+
+        possible future additions
+        3) most recently read files
+        4) most recently edited files
+            (stream data from magnetometer; referred to in demag_gui_au as 'go live')
+
+"""
 
 def main(dropbox=False):
     """
-
     Parameters
     ----------
     dropbox : bool, optional
 
     Returns
     -------
-    local configuration for demag_gui_au
+    local paths to configure Demag GUI Autoupdate
 
     """
     demaggui_user = {}
-
+    # check if file already exists
+    demaggui_user["pkg_dir"] = os.path.abspath(os.path.dirname(__file__))
+    if os.path.isfile(os.path.join(demaggui_user["pkg_dir"], "config", "user.py")):
+        rewrite = input("Configuration file 'user.py' already exists. Overwrite? (y/[n])")
+        if rewrite=="y":
+            pass
+        else:
+            print("Quitting..."); sys.exit()
+    # find main data directory
     data_dir = ''
     if dropbox:
         data_dir = find_dropbox()
@@ -36,7 +54,6 @@ def main(dropbox=False):
                 print("%s not a valid path!"%(data_dir))
 
     demaggui_user["data_dir"] = data_dir
-    demaggui_user["pkg_dir"] = os.path.abspath(os.path.dirname(__file__))
     demaggui_user["magic_out"] = os.path.join(demaggui_user["pkg_dir"], "data")
     demaggui_user["inp_dir"] = os.path.join(demaggui_user["magic_out"], "inp_files")
     if not os.path.exists(demaggui_user["magic_out"]):
@@ -44,13 +61,7 @@ def main(dropbox=False):
     if not os.path.exists(os.path.join(demaggui_user["pkg_dir"], "config")):
         os.makedirs(os.path.join(demaggui_user["pkg_dir"], "config"))
         open(os.path.join(demaggui_user["pkg_dir"], "config", "__init__.py"), 'x')
-    if os.path.isfile(os.path.join(demaggui_user["pkg_dir"], "config", "user.py")):
-        abort = input("Configuration file 'user.py' already exists. Overwrite? (y/[n])")
-        if abort=="y":
-            pass
-        else:
-            print("Aborting..."); sys.exit()
-    user_vars = open("./config/user.py", "w")
+    user_vars = open("./config/user.py", "w+")
     user_vars.write("demaggui_user = " + str(demaggui_user))
     user_vars.close()
     print("""
@@ -66,6 +77,5 @@ def main(dropbox=False):
 
 if __name__ == "__main__":
     if "dropbox" in sys.argv:
-        main(dropbox=True)
-    else:
-        main()
+        dropbox=True
+    main(dropbox)

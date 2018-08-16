@@ -46,29 +46,127 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
+class Logger(object):
+    """
+    log stdout to debug_inp.log
+    """
+    def __init__(self,clr_output=True):
+        global usr_configs_read, data_output_path
+        self.clr_output = clr_output
+        self.terminal = sys.stdout
+        log_file = "demag_gui_au.log"
+        if usr_configs_read:
+            log_file = os.path.join(data_output_path,log_file)
+        self.log = open(log_file, "a+")
+        self.log.write(
+            '\n{:-^80}\n\n'.format('  Starting session at {}  '.format(asctime())))
+
+    def write(self, message):
+        if self.clr_output:
+            if '-I-' in str(message):
+                if 'Timer' in str(message):
+                    self.terminal.write(bcolors.OKBLUE)
+                else:
+                    self.terminal.write(bcolors.OKGREEN)
+            elif '-W-' in str(message):
+                self.terminal.write(bcolors.WARNING)
+            elif '-E-' in str(message):
+                self.terminal.write(bcolors.FAIL)
+        self.terminal.write(message)
+        if self.clr_output:
+            self.terminal.write(bcolors.ENDC)
+        self.log.write(message)
+
+    def flush(self):
+        #this flush method is needed for python 3 compatibility.
+        #this handles the flush command by doing nothing.
+        #you might want to specify some extra behavior here.
+        pass
+
+    def cut_info_stmts(self):
+        if not self.log.close():
+            reopen_log = True
+            self.log.close()
+        else:
+            reopen_log = False
+        lines = open('demag_gui_au.log').readlines()
+        stmt_flags = ['-I-','Closing']
+        to_save = [i for i, l in enumerate(lines) if not any(
+            [fg in l for fg in stmt_flags])]
+        newlogl=[lines[s] for s in to_save]
+        newlog=open("demag_gui_au.log", "w+")
+        if reopen_log:
+            self.log = open("demag_gui_au.log", "a+")
+
+def start_logger():
+    sys.stdout = Logger()
+    # sys.stdout.cut_info_stmts()
+
+def stop_logger():
+    sys.stdout.log.write('{:-^80}\n'.format('  Closing session  '))
+    sys.stdout.log.close()
+    sys.stdout = sys.__stdout__
+
 class Demag_GUIAU(dgl.Demag_GUI):
 
     def __init__(self, WD=None, write_to_log_file=True, inp_file=None,
-                 delay_time=3, data_model=3, test_mode_on=True):
+                 delay_time=3, data_model=3.0, test_mode_on=True):
         global usr_configs_read, inp_dir, pkg_dir
+        if write_to_log_file: start_logger()
         self.title = "Demag GUI Autoupdate | %s"%(CURRENT_VERSION.strip("pmagpy-"))
         if WD is None:
             self.WD = os.getcwd()
         else:
-            self.WD = WD
+            self.WD = os.path.realpath(os.path.expanduser(WD))
+        WD_short = self.shortpath(self.WD)
+        if not os.path.isdir(self.WD):
+            print(f"-E- Working directory {WD_short} does not exist. ")
+        print(f"-I- Working directory set to {WD_short}")
         # self.delete_magic_files(self.WD)
         self.data_model = data_model
         self.delay_time = delay_time
+
+        if inp_file is None:
+            temp_inp_pick = wx.Frame()
+            if usr_configs_read:
+                inp_file_name = self.pick_inp(temp_inp_pick,inp_dir)
+                # inp_file_name = self.pick_inp(self,inp_dir)
+            else:
+                inp_file_name = self.pick_inp(temp_inp_pick,self.WD)
+                # inp_file_name = self.pick_inp(self,self.WD)
+            temp_inp_pick.Destroy()
+        elif not os.path.isfile(os.path.realpath(inp_file)):
+            inp_file = os.path.realpath(inp_file)
+            if os.path.isfile(os.path.join(self.WD, inp_file)):
+                inp_file_name = os.path.join(self.WD, inp_file)
+            elif usr_configs_read:
+                if os.path.isfile(os.path.join(inp_dir, os.path.basename(inp_file))):
+                    inp_file_name = os.path.join(inp_dir, os.path.basename(inp_file))
+            else:
+                print(f"-E- Could not find .inp file {inp_file}")
+                return
+        else:
+            inp_file_name = inp_file
+
+        self.inp_file = inp_file_name
+        magic_files = {}
+        self.read_inp(self.WD, self.inp_file, magic_files, self.data_model)
+        self.combine_magic_files(self.WD, magic_files, self.data_model)
+        # self.on_new_inp()
+        # self.update_loop(force_update=True)
+
         try:
-            super().__init__(
+            super(Demag_GUIAU, self).__init__(
                 WD=WD,
-                write_to_log_file=write_to_log_file,
+                # overwrite this for log testing purposes;
+                # should override the superclass logging methods
+                # for this eventually
+                write_to_log_file=False,
                 data_model=data_model,
                 test_mode_on=test_mode_on
             )
         except ValueError:
-            raise ValueError("Data model you entered is not a number")
-
+            raise ValueError("-E- Data model you entered is not a number")
         # make changes to the demag_gui parent frame
         # add buttons for triggering autoupdate functions
         self.au_add_buttons()
@@ -82,29 +180,29 @@ class Demag_GUIAU(dgl.Demag_GUI):
         self.menubar.Refresh()
         # make statusbar
         self.statusbar = self.CreateStatusBar(1)
-
         # find .inp file
-        if inp_file is None:
-            if usr_configs_read:
-                inp_file_name = self.pick_inp(self,inp_dir)
-            else:
-                inp_file_name = self.pick_inp(self,self.WD)
-        elif not os.path.isfile(inp_file):
-            if os.path.isfile(os.path.join(self.WD, inp_file)):
-                inp_file_name = os.path.join(self.WD, inp_file)
-            elif usr_configs_read:
-                if os.path.isfile(os.path.join(inp_dir, os.path.basename(inp_file))):
-                    inp_file_name = os.path.join(inp_dir, os.path.basename(inp_file))
-            else:
-                print("-E- Could not find .inp file %s"%(inp_file))
-                return
-        else:
-            inp_file_name = inp_file
+        # if inp_file is None:
+        #     if usr_configs_read:
+        #         inp_file_name = self.pick_inp(self,inp_dir)
+        #     else:
+        #         inp_file_name = self.pick_inp(self,self.WD)
+        # elif not os.path.isfile(os.path.realpath(inp_file)):
+        #     inp_file = os.path.realpath(inp_file)
+        #     if os.path.isfile(os.path.join(self.WD, inp_file)):
+        #         inp_file_name = os.path.join(self.WD, inp_file)
+        #     elif usr_configs_read:
+        #         if os.path.isfile(os.path.join(inp_dir, os.path.basename(inp_file))):
+        #             inp_file_name = os.path.join(inp_dir, os.path.basename(inp_file))
+        #     else:
+        #         print(f"-E- Could not find .inp file {inp_file}")
+        #         return
+        # else:
+        #     inp_file_name = inp_file
 
-        self.inp_file = inp_file_name
-        magic_files = {}
-        self.read_inp(self.WD, self.inp_file, magic_files, self.data_model)
-        self.combine_magic_files(self.WD, magic_files, self.data_model)
+        # self.inp_file = inp_file_name
+        # magic_files = {}
+        # self.read_inp(self.WD, self.inp_file, magic_files, self.data_model)
+        # self.combine_magic_files(self.WD, magic_files, self.data_model)
         self.on_new_inp()
         self.update_loop(force_update=True)
         self.set_statusbar()
@@ -112,6 +210,7 @@ class Demag_GUIAU(dgl.Demag_GUI):
         self.timer = Timer(self, ID_ANY)
         self.timer.Start(self.delay_time*1000)
         self.Bind(EVT_TIMER, self.on_timer)
+        self.Bind(wx.EVT_CLOSE, self.OnClose)
 
     ####################################################
     #  initialization methods/changes to the main GUI  #
@@ -169,15 +268,34 @@ class Demag_GUIAU(dgl.Demag_GUI):
         return abspath.replace(os.path.expanduser('~') + os.sep, '~/', 1)
 
     @staticmethod
-    def clr_output(raw_str):
-        if str(raw_str).startswith('-I-'):
-            print(bcolors.OKGREEN + raw_str + bcolors.ENDC)
-        elif str(raw_str).startswith('-W-'):
-            print(bcolors.WARNING + raw_str + bcolors.ENDC)
-        elif str(raw_str).startswith('-E-'):
-            print(bcolors.FAIL + raw_str + bcolors.ENDC)
-        else:
-            print(raw_str)
+    def delete_magic_files(self, WD, data_model=3.0):
+        compiled_file_names = [
+            'measurements.txt',
+            'specimens.txt',
+            'samples.txt',
+            'sites.txt',
+            'locations.txt',
+            'contribution.txt',
+            'criteria.txt',
+            'ages.txt',
+            'images.txt',
+            '.magic']
+        wd_files = list(filter(os.path.isfile, map(lambda x: os.path.join(wd,x),os.listdir(wd))))
+        mfiles = list(filter(lambda x: any([str(x).endswith(fname) for fname in compiled_file_names]),wd_files))
+        for mfile in compiled_file_names:
+            os.remove(os.path.relpath(mfile))
+            print("-I- Removing %s"%(os.path.relpath(mfile)))
+
+    # @staticmethod
+    # def clr_output(raw_str):
+    #     if str(raw_str).startswith('-I-'):
+    #         print(bcolors.OKGREEN + raw_str + bcolors.ENDC)
+    #     elif str(raw_str).startswith('-W-'):
+    #         print(bcolors.WARNING + raw_str + bcolors.ENDC)
+    #     elif str(raw_str).startswith('-E-'):
+    #         print(bcolors.FAIL + raw_str + bcolors.ENDC)
+    #     else:
+    #         print(raw_str)
 
     ##############################################
     #  get attributes (and other useful values)  #
@@ -368,9 +486,11 @@ class Demag_GUIAU(dgl.Demag_GUI):
             self.site = self.Data_hierarchy['site_of_specimen'][self.s]
         except KeyError:
             self.site = ""
-
         # Draw figures and add text
-        if self.Data and any(self.Data[s][k] if not isinstance(self.Data[s][k], type(array([]))) else self.Data[s][k].any() for s in self.Data for k in self.Data[s]):
+        if self.Data and any(
+                self.Data[s][k] if not isinstance(
+                    self.Data[s][k],type(array([])))
+                else self.Data[s][k].any() for s in self.Data for k in self.Data[s]):
             # get previous interpretations from pmag tables
             if self.data_model == 3.0 and 'specimens' in self.con.tables:
                 self.get_interpretations3()
@@ -579,8 +699,15 @@ class Demag_GUIAU(dgl.Demag_GUI):
                 CIT_kwargs["input_dir_path"] = os.path.dirname(
                     update_dict["sam_path"])
                 # CIT_kwargs["data_model"] = data_model
+                # print('-I- from .inp file, converting {} to MagIC with the'
+                        # 'following parameters:'.format(CIT_kwargs["magfile"]))
+                # try:
+                #     import textwrap
+                #     print(textwrap.indent(str(CIT_kwargs),4*' '))
+                # except:
+                #     print(str(CIT_kwargs))
 
-                if int(float(data_model)) == 3:
+                if float(data_model) == 3.0:
                     program_ran, error_message = convert.cit(**CIT_kwargs)
                 else:
                     program_ran, error_message = cit_magic.main(
@@ -669,16 +796,6 @@ class Demag_GUIAU(dgl.Demag_GUI):
             if 'sites' in magic_files.keys():
                 combine_magic(magic_files['sites'],
                               os.path.join(WD, "er_sites.txt"))
-
-
-    def delete_magic_files(self, WD, data_model=3.0):
-        compiled_table_names = ['measurements', 'specimens', 'samples',
-                            'sites', 'locations', 'contribution',
-                            'criteria', 'ages', 'images']
-        for mtable in compiled_table_names:
-            if os.path.exists(os.path.join(WD,mtable+'.txt')):
-                os.remove(os.path.join(WD,mtable+'.txt'))
-                print("-I- Removing %s"%(os.path.join(WD,mtable+'.txt')))
 
     #############
     #  dialogs  #
@@ -792,16 +909,30 @@ class Demag_GUIAU(dgl.Demag_GUI):
         # redraw interpretations
         self.update_GUI_with_new_interpretation()
 
+    def OnClose(self, event):
+        """
+        Close down all processes
+        """
+        # stop the timer
+        if self.timer.IsRunning():
+            self.timer.Stop()
+            print("-I- Timer stopped")
+        # stop the logger
+        stop_logger()
+        self.Destroy()
+
 
 def start(WD=None, inp_file=None, delay_time=1, vocal=False, data_model=3):
     global cit_magic
-
     if int(float(data_model)) == 3:
         cit_magic = cit_magic3
     else:
         cit_magic = cit_magic2
     app = App()
-    dg = Demag_GUIAU(WD, not vocal, inp_file, delay_time, float(data_model))
+    # start the GUI
+    # overriding vocal argument `not vocal` for testing purposes
+    dg = Demag_GUIAU(WD, write_to_log_file=True, inp_file=inp_file,
+            delay_time=delay_time, data_model=float(data_model))
     app.frame = dg
     app.frame.Center()
     app.frame.Show()
@@ -809,8 +940,11 @@ def start(WD=None, inp_file=None, delay_time=1, vocal=False, data_model=3):
 
 def main():
     kwargs = {}
+    if any(x in sys.argv for x in ["-h","--help"]):
+        help(dgl); sys.exit()
     global data_output_path, usr_configs_read
     if usr_configs_read:
+        print('-I- Successfully read in user configs and local paths')
         kwargs['WD'] = data_output_path
 
     if "-WD" in sys.argv:

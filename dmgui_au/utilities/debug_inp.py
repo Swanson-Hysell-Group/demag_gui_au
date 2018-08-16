@@ -3,7 +3,7 @@
 
 """
 NAME:
-    debug_inp
+    debug_inp.py
 
 DESCRIPTION:
     debugs and fixes with user input .inp format files of CIT (sam file) type data.
@@ -50,11 +50,13 @@ FLAGS:
 """
 
 import sys,os
+import argparse
 import pandas as pd
 import numpy as np
 import pmagpy.controlled_vocabularies2 as cv2
 import pmagpy.controlled_vocabularies3 as cv
 from functools import reduce
+from time import time, asctime
 import pdb
 
 global data_dir, inp_dir, data_output_path, usr_configs_read
@@ -84,10 +86,37 @@ Sample naming convention could not be determined. Choose from the list below:
 
 Enter number here: """
 
+class Logger(object):
+    """
+    log stdout to debug_inp.log
+    """
+    def __init__(self):
+        self.terminal = sys.stdout
+        self.log = open("debug_inp.log", "a+")
+        self.log.write('\n{:-^80}\n\n'.format('  Starting session at {}  '.format(asctime())))
+
+    def write(self, message):
+        self.terminal.write(message)
+        self.log.write(message)
+
+    def flush(self):
+        #this flush method is needed for python 3 compatibility.
+        #this handles the flush command by doing nothing.
+        #you might want to specify some extra behavior here.
+        pass
+
+def start_logger():
+    sys.stdout = Logger()
+
+def stop_logger():
+    sys.stdout.log.write('{:-^80}\n'.format('  Closing session  '))
+    sys.stdout.log.close()
+    sys.stdout = sys.__stdout__
+
 def shortpath(abspath):
     return abspath.replace(os.path.expanduser('~') + os.sep, '~/', 1)
 
-def debug_inp(inp_file, drpbx = False, **kwargs):
+def debug_inp(inp_file, dropbox = False, **kwargs):
 
     """Fixes .inp files
 
@@ -96,7 +125,7 @@ def debug_inp(inp_file, drpbx = False, **kwargs):
     inp_file : filename
         Name of .inp file; can be relative or absolute path.
 
-    drpbx : bool, optional
+    dropbox : bool, optional
         When searching for the correct paths to data files,
         prioritize user Dropbox folder. If you have already
         specified your data directory in the global configuration
@@ -134,14 +163,15 @@ def debug_inp(inp_file, drpbx = False, **kwargs):
     if "~" in inp_file: inp_file = os.path.expanduser(inp_file)
     if not os.path.isfile(inp_file):
         if usr_configs_read:
+            print('-I- Successfully read in user configs and local paths')
             if os.path.isfile(os.path.join(inp_dir,os.path.basename(inp_file))):
                 inp_file = os.path.abspath(os.path.join(inp_dir,os.path.basename(inp_file)))
         else:
-            print("%s is not a valid file path, aborting"%inp_file); return
+            print("-E- %s is not a valid file path, aborting"%inp_file); return
     inp_directory,inp_file_name = os.path.split(inp_file)
     if inp_directory=='': inp_directory = '.'
     inp_file = os.path.abspath(inp_file)
-    print("Running on %s and changing CWD to %s\n"%(inp_file_name,inp_directory))
+    print("-I- Running on %s and changing CWD to '%s'"%(inp_file_name,inp_directory))
     os.chdir(inp_directory)
 
     # first deal with any user-specified overrides
@@ -164,10 +194,10 @@ def debug_inp(inp_file, drpbx = False, **kwargs):
         for key, value in force_rewrite_dict.items():
             if value is not None:
                 if int(value) == -1:
-                    print("\n----> Resetting {} to NULL...".format(key))
+                    print("\n-I- Resetting {} to NULL...".format(key))
                     df.ix[0][key]=None
                 else:
-                    print("\n----> Setting {} to {}...".format(key, value))
+                    print("\n-I- Setting {} to {}...".format(key, value))
                     df.ix[0][key]=str(value)
         inp_out = open(inp_file, 'w+')
         inp_out.write("CIT\r\n")
@@ -179,19 +209,15 @@ def debug_inp(inp_file, drpbx = False, **kwargs):
     header,sam_path,name_con,num_term_char = inpl[1].split('\t'),'','',''
     for line in inpl[2:]:
         if len(line.split('\t')) != len(header):
-            print("""
+            print("""\
             Some lines in file -- %s -- have different length entries than the header.
 
             You will have to check this manually as this function is not supported yet. Aborting...
-
             """%inp_file)
             return
     if inpl[0]=='CIT':
         if 'sam_path' not in header:
             sam_path = input("No .sam file name or path in .inp file %s, please provide a path: ")
-
-        # TODO: Automate nc fix if 'force_rewrite' argument given
-        # <08-08-18, Luke Fairchild> #
 
         if 'naming_convention' not in header:
             name_con = input(nc_info_str)
@@ -208,10 +234,10 @@ Please enter that number here or press enter to continue with default (=1): """)
         while not os.path.isfile(str(sam_path)):
             directory = os.path.split(str(sam_path))[0]
             sam_file = os.path.split(str(sam_path))[1]
-            if drpbx or usr_configs_read:
+            if dropbox or usr_configs_read:
                 if usr_configs_read:
                     search_path = data_dir
-                elif drpbx:
+                elif dropbox:
                     if os.path.isfile(os.path.expanduser("~/.dropbox/info.json")):
                         drpbx_info_file = os.path.expanduser("~/.dropbox/info.json")
                         drpbx_info = open(drpbx_info_file, 'r')
@@ -237,7 +263,9 @@ Please enter that number here or press enter to continue with default (=1): """)
             d_or_f = input("The .sam file path in inp_file %s does not exist.\n\n"
                     "Was given directory:\n\n    %s\n\nand file:\n\n    %s\n\n"
                     "Is the [f]ile name or [d]irectory bad? "
-                    "If both, correct the file name first. ([d]/f): "%(inp_file_name,directory,sam_file))
+                    "If both, correct the file name first. ( [d] / f , or s to skip): "%(inp_file_name,directory,sam_file))
+            if d_or_f=='s':
+                return
             if d_or_f=='f':
                 new_file_name = input("Please input the correct file name for the .sam file: ")
                 df['sam_path'] = os.path.join(directory,new_file_name)
@@ -273,6 +301,9 @@ Please enter that number here or press enter to continue with default (=1): """)
         nc = df.ix[i]['naming_convention']
         if pd.isna(nc): # force rewrite
             site_name = os.path.basename(os.path.dirname(sam_path))
+            if site_name not in sl[0]:
+                site_name = input("Trouble with site name {} -- does not match samples (e.g. {}).\n"
+                        "Input correct site name: ".format(site_name,sl[0]))
 
             # catch delimeter if it is appended to site name (sometimes the case)
             if not site_name[-1].isalnum():
@@ -284,6 +315,7 @@ Please enter that number here or press enter to continue with default (=1): """)
                 samp_names = []
                 for samp in sl:
                     samp_names.append(samp.partition(site_name)[-1])
+                print(samp_names)
                 if all([not x[0].isalnum() for x in samp_names]):
                     if all([x[0]=='-' for x in samp_names]):
                         nc = int(2)
@@ -297,7 +329,7 @@ Please enter that number here or press enter to continue with default (=1): """)
                 new_nc = nc
                 df.ix[i]['naming_convention']=str(new_nc)
 
-        if nc > 7 or nc < 1:
+        if int(nc) > 7 or int(nc) < 1:
             new_nc = input(nc_info_str)
             df.ix[i]['naming_convention']=new_nc
 
@@ -313,66 +345,64 @@ Please enter that number here or press enter to continue with default (=1): """)
                     the_rest = pd.Series([t[0:-1] for t in the_rest])
                 else:
                     break
-            nt_confirm = input("Guessing that the number of terminal characters is {}.\nPress enter to confirm or enter the correct number here: ".format(nt_ctr))
+            nt_confirm = input("Guessing that the number of terminal characters = {} based on sample names like:\n{:^15}{:^15}{:^15}{:^15}\n\nPress enter to confirm or enter the correct number here: ".format(nt_ctr, *sl[:4]))
             if nt_confirm=='':
                 new_nt = str(nt_ctr)
             else:
                 new_nt = nt_confirm
             df.ix[i]['num_terminal_char'] = new_nt
 
-        # switch to short path for display
-        df_display = df.copy()
-        df_display.sam_path = df_display.sam_path.map(shortpath)
-        with pd.option_context('display.max_rows', None,
-                'display.max_columns', None, 'display.max_colwidth', int(1.2*len(df_display.sam_path.max()))):
-            print(df_display.transpose())
+        # format df for display
+        with pd.option_context('display.colheader_justify', 'left', 'display.max_rows', None,
+                'display.max_columns', None, 'display.max_colwidth', -1):
+            df_display = df.copy()
+            df_display.sam_path = df_display.sam_path.map(shortpath)
+            df_display = df_display.T
+            df_display.rename(index={'dont_average_replicate_measurements':'dont_average'},inplace=True)
+            print("\n"+df_display.to_string(header=False))
 
-    print("\nWriting fixed data back to %s"%(inp_file_name))
+    print("\n"+"-I- Writing to %s..."%(inp_file_name)+"\n")
     try:
         inp_out = open(inp_file, 'w+')
         inp_out.write("CIT\r\n")
         df.to_csv(inp_out, sep="\t", header=True, index=False)
     except IOError:
-        print("Could not write to directory %s, writing to %s instead"%(directory,os.path.abspath('.')))
+        print("-E- Could not write to directory %s, writing to %s instead"%(directory,os.path.abspath('.')))
         inp_out = open(os.path.join(os.path.abspath('.'),inp_file_name), 'w+')
         inp_out.write("CIT\r\n")
         df.to_csv(inp_out, sep="\t", header=True, index=False)
 
-if __name__=="__main__":
-    kwargs = {}
-    for flg in ['-h', '--help']:
-        if flg in sys.argv:
-            help(main); sys.exit()
-    for flg in ['-dx', '--dropbox']:
-        if flg in sys.argv:
-            dropbox = True
-            break
-        else:
-            dropbox = False
+def is_inp_filename(string):
+    value = int(string)
+    sqrt = math.sqrt(value)
+    if sqrt != int(sqrt):
+        msg = "%r is not a perfect square" % string
+        raise argparse.ArgumentTypeError(msg)
+    return value
 
-    if '--sam_path' in sys.argv:
-        idx = sys.argv.index('--sam_path')
-        kwargs['sam_path'] = sys.argv[idx+1]
-    if '--magic_codes' in sys.argv:
-        idx = sys.argv.index('--magic_codes')
-        kwargs['magic_codes'] = sys.argv[idx+1]
-    if '--loc' in sys.argv:
-        idx = sys.argv.index('--loc')
-        kwargs['loc'] = sys.argv[idx+1]
-    if '--nc' in sys.argv:
-        idx = sys.argv.index('--nc')
-        kwargs['nc'] = sys.argv[idx+1]
-    if '--term' in sys.argv:
-        idx = sys.argv.index('--term')
-        kwargs['term'] = sys.argv[idx+1]
-    if '--no_ave' in sys.argv:
-        idx = sys.argv.index('--no_ave')
-        kwargs['no_ave'] = sys.argv[idx+1]
-    if '--peak_AF' in sys.argv:
-        idx = sys.argv.index('--peak_AF')
-        kwargs['peak_AF'] = sys.argv[idx+1]
+# if __name__=="__main__":
+def main():
+    parser = argparse.ArgumentParser(description="Debug .inp files.", add_help=False)
+    parser.add_argument('-h', action='help',
+            help='show short (-h) or detailed (--help) help message')
+    parser.add_argument('inp_file', nargs='*')#, type=)#, default=sys.stdin)
+    parser.add_argument('-dx','--dropbox', action='store_true')
+    parser.add_argument('--sam_path')
+    parser.add_argument('--magic_codes')
+    parser.add_argument('--nc')
+    parser.add_argument('--term')
+    parser.add_argument('--no_ave')
+    parser.add_argument('--peak_AF')
+    parser.add_argument('--help', dest='help_long', action='store_const',
+            const=True, help = argparse.SUPPRESS)
+    args = vars(parser.parse_args())
+    if args['help_long']:
+        help(__name__); sys.exit()
+    start_logger()
+    inp_file_list = args.pop('inp_file')
+    for filename_inp in inp_file_list:
+        debug_inp(filename_inp, **args)
+    stop_logger()
 
-    if len(sys.argv)==1:
-        print("program needs a .inp file to debug, aborting"); sys.exit()
-    # print("Running with options drpbx={}, force_rewrite_sam_path = {}, force_rewrite_nc = {}".format(dropbox,fs,fn))
-    debug_inp(sys.argv[1], drpbx=dropbox, **kwargs)
+if __name__ == "__main__":
+    main()

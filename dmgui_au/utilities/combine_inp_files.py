@@ -3,7 +3,7 @@ import os,sys
 import utilities.demag_gui_au as dgl
 from wx import App
 
-def combine_inp(sd, out_path='DemagGUI_AU/data/inp_files/'):
+def combine_inp(sd, out_path='.'):
     """
     Function that combines inp files into a single inp file which allows faster running of autoupdate wrapper of demag_gui.
 
