@@ -1,15 +1,21 @@
-from . import config
-from .config import user
+import sys
+import os
+import configparser
 
-# if they exist, declare path names to be used globally
 try:
-    from_usr = user.demaggui_user
-    data_output_path = from_usr["magic_out"]
-    data_dir = from_usr["data_dir"]
-    inp_dir = from_usr["inp_dir"]
+    configfile = os.path.join(os.path.dirname(__file__),"dmgui_au.conf")
+    configs = configparser.ConfigParser()
+    configs.read_file(open(configfile))
+    configs.read(configfile)
+    top_dir = configs['PathNames']['top_dir']
+    pkg_dir = configs['PathNames']['pkg_dir']
+    data_dir = configs['PathNames']['data_dir']
+    data_src = configs['PathNames']['data_src']
+    inp_dir = configs['PathNames']['inp_dir']
 except:
     # if setup.py is running, don't issue warning
     if sys.argv[0] != 'setup.py':
-        print("User configuration/local path names not loaded. Please run setup.py")
+        print("-W- Local path names have not been set. Please run setup.py")
     else:
         pass
+

@@ -57,18 +57,17 @@ import pmagpy.controlled_vocabularies2 as cv2
 import pmagpy.controlled_vocabularies3 as cv
 from functools import reduce
 from time import time, asctime
-import pdb
+from .funcs import shortpath
+# import pdb
 
-global data_dir, inp_dir, data_output_path, usr_configs_read
+# global top_dir, pkg_dir, data_dir, data_src, inp_dir, usr_configs_read
 try: # get path names if set
-    import dmgui_au.config.user as user
-    path_conf = user.demaggui_user
-    data_dir = path_conf['data_dir']
-    inp_dir = path_conf['inp_dir']
-    data_output_path = path_conf['magic_out']
+    from dmgui_au import pkg_dir, data_dir, data_src, inp_dir
     usr_configs_read = True
 except:
-    warnings.warn("Local paths used by this package have not been defined; please run the script setup.py")
+    # if setup.py is running, don't issue warning
+    if sys.argv[0] != 'setup.py':
+        print("-W- Local path names have not been set. Please run setup.py")
     usr_configs_read = False
 
 nc_info_str ="""
@@ -113,11 +112,8 @@ def stop_logger():
     sys.stdout.log.close()
     sys.stdout = sys.__stdout__
 
-def shortpath(abspath):
-    return abspath.replace(os.path.expanduser('~') + os.sep, '~/', 1)
-
-def debug_inp(inp_file, dropbox = False, **kwargs):
-
+def debug_inp(inp_file, dropbox = False, noinput=False, usr_configs_read=None,
+        data_dir=None, data_src=None, inp_dir=None, **kwargs):
     """Fixes .inp files
 
     Parameters
@@ -158,20 +154,11 @@ def debug_inp(inp_file, dropbox = False, **kwargs):
     New .inp file
 
     """
-    global data_dir, inp_dir, data_output_path, usr_configs_read
-
-    if "~" in inp_file: inp_file = os.path.expanduser(inp_file)
-    if not os.path.isfile(inp_file):
-        if usr_configs_read:
-            print('-I- Successfully read in user configs and local paths')
-            if os.path.isfile(os.path.join(inp_dir,os.path.basename(inp_file))):
-                inp_file = os.path.abspath(os.path.join(inp_dir,os.path.basename(inp_file)))
-        else:
-            print("-E- %s is not a valid file path, aborting"%inp_file); return
     inp_directory,inp_file_name = os.path.split(inp_file)
     if inp_directory=='': inp_directory = '.'
     inp_file = os.path.abspath(inp_file)
-    print("-I- Running on %s and changing CWD to '%s'"%(inp_file_name,inp_directory))
+    print("-I- Running on %s and changing CWD to '%s'" %
+          (inp_file_name, shortpath(inp_directory)))
     os.chdir(inp_directory)
 
     # first deal with any user-specified overrides
@@ -210,22 +197,31 @@ def debug_inp(inp_file, dropbox = False, **kwargs):
     for line in inpl[2:]:
         if len(line.split('\t')) != len(header):
             print("""\
-            Some lines in file -- %s -- have different length entries than the header.
+            -E- Some lines in file -- %s -- have different length entries than the header.
 
-            You will have to check this manually as this function is not supported yet. Aborting...
+                You will have to check this manually as this function is not supported yet. Aborting...
             """%inp_file)
             return
     if inpl[0]=='CIT':
         if 'sam_path' not in header:
-            sam_path = input("No .sam file name or path in .inp file %s, please provide a path: ")
+            if noinput:
+                print("-W- No .sam file name or path in .inp file %s"%inp_file)
+            else:
+                sam_path = input("No .sam file name or path in .inp file %s, please provide a path: "%inp_file)
 
         if 'naming_convention' not in header:
-            name_con = input(nc_info_str)
+            if noinput:
+                print('-W- No naming convention in .inp file %s'%inp_file)
+            else:
+                name_con = input(nc_info_str)
 
         if 'num_terminal_char' not in header:
-            num_term_char = input("""
-Missing number of terminal characters that define a specimen.
-Please enter that number here or press enter to continue with default (=1): """)
+            if noinput:
+                print("-W- Missing number of terminal characters in .inp file %s"%inp_file)
+            else:
+                num_term_char = input("""\
+                        Missing number of terminal characters that define a specimen.
+                        Please enter that number here or press enter to continue with default (=1): """)
 
     df = pd.read_csv(inp_file, sep='\t', header=1, dtype=str)
 
@@ -236,7 +232,7 @@ Please enter that number here or press enter to continue with default (=1): """)
             sam_file = os.path.split(str(sam_path))[1]
             if dropbox or usr_configs_read:
                 if usr_configs_read:
-                    search_path = data_dir
+                    search_path = data_src
                 elif dropbox:
                     if os.path.isfile(os.path.expanduser("~/.dropbox/info.json")):
                         drpbx_info_file = os.path.expanduser("~/.dropbox/info.json")
@@ -260,6 +256,9 @@ Please enter that number here or press enter to continue with default (=1): """)
                 if os.path.isfile(str(sam_path)):
                     break
 
+            if noinput:
+                print("-W- Could not resolve the file path in .inp file %s. Aborting..."%inp_file_name)
+                return
             d_or_f = input("The .sam file path in inp_file %s does not exist.\n\n"
                     "Was given directory:\n\n    %s\n\nand file:\n\n    %s\n\n"
                     "Is the [f]ile name or [d]irectory bad? "
@@ -315,7 +314,7 @@ Please enter that number here or press enter to continue with default (=1): """)
                 samp_names = []
                 for samp in sl:
                     samp_names.append(samp.partition(site_name)[-1])
-                print(samp_names)
+                # print(samp_names)
                 if all([not x[0].isalnum() for x in samp_names]):
                     if all([x[0]=='-' for x in samp_names]):
                         nc = int(2)
@@ -359,9 +358,9 @@ Please enter that number here or press enter to continue with default (=1): """)
             df_display.sam_path = df_display.sam_path.map(shortpath)
             df_display = df_display.T
             df_display.rename(index={'dont_average_replicate_measurements':'dont_average'},inplace=True)
-            print("\n"+df_display.to_string(header=False))
+            print("\n".join([" |  {}".format(i) for i in df_display.to_string(header=False).split("\n")]))
 
-    print("\n"+"-I- Writing to %s..."%(inp_file_name)+"\n")
+    print("-I- Writing to %s..."%(inp_file_name)+"\n")
     try:
         inp_out = open(inp_file, 'w+')
         inp_out.write("CIT\r\n")
@@ -372,15 +371,6 @@ Please enter that number here or press enter to continue with default (=1): """)
         inp_out.write("CIT\r\n")
         df.to_csv(inp_out, sep="\t", header=True, index=False)
 
-def is_inp_filename(string):
-    value = int(string)
-    sqrt = math.sqrt(value)
-    if sqrt != int(sqrt):
-        msg = "%r is not a perfect square" % string
-        raise argparse.ArgumentTypeError(msg)
-    return value
-
-# if __name__=="__main__":
 def main():
     parser = argparse.ArgumentParser(description="Debug .inp files.", add_help=False)
     parser.add_argument('-h', action='help',
@@ -393,6 +383,7 @@ def main():
     parser.add_argument('--term')
     parser.add_argument('--no_ave')
     parser.add_argument('--peak_AF')
+    parser.add_argument('--noinput', action='store_true', help='bypass all input()')
     parser.add_argument('--help', dest='help_long', action='store_const',
             const=True, help = argparse.SUPPRESS)
     args = vars(parser.parse_args())
@@ -401,7 +392,25 @@ def main():
     start_logger()
     inp_file_list = args.pop('inp_file')
     for filename_inp in inp_file_list:
-        debug_inp(filename_inp, **args)
+        global data_dir, data_src, inp_dir, usr_configs_read
+        if not usr_configs_read:
+            data_dir, data_src, inp_dir = None,None,None
+
+        if "~" in filename_inp: filename_inp = os.path.expanduser(filename_inp)
+        if not os.path.isfile(filename_inp):
+            if usr_configs_read:
+                print('-I- Successfully read in user configs and local paths')
+                if os.path.isfile(os.path.join(inp_dir,os.path.basename(filename_inp))):
+                    filename_inp = os.path.abspath(os.path.join(inp_dir,os.path.basename(filename_inp)))
+            else:
+                print("-E- %s is not a valid file path, aborting"%filename_inp); return
+        debug_inp(
+            filename_inp,
+            usr_configs_read=usr_configs_read,
+            data_dir=data_dir,
+            data_src=data_src,
+            inp_dir=inp_dir,
+            **args)
     stop_logger()
 
 if __name__ == "__main__":

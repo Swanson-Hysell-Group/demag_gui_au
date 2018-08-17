@@ -3,7 +3,6 @@
 
 import os
 import sys
-import warnings
 # import pdb
 import programs.demag_gui as dgl
 from pmagpy.demag_gui_utilities import find_file
@@ -20,17 +19,16 @@ import wx
 import wx.adv
 from functools import reduce
 import pmagpy.pmag as pmag
-# get path names if set
-try:
-    import dmgui_au.config.user as user
-    path_conf = user.demaggui_user
-    data_dir = path_conf['data_dir']
-    inp_dir = path_conf['inp_dir']
-    data_output_path = path_conf['magic_out']
-    pkg_dir = path_conf['pkg_dir']
+from funcs import shortpath
+
+global top_dir, pkg_dir, data_dir, data_src, inp_dir, usr_configs_read
+try: # get path names if set
+    from dmgui_au import pkg_dir, data_dir, data_src, inp_dir
     usr_configs_read = True
 except:
-    print("-W- Local paths used by this package have not been defined; please run the script setup.py")
+    # if setup.py is running, don't issue warning
+    if sys.argv[0] != 'setup.py':
+        print("-W- Local path names have not been set. Please run setup.py")
     usr_configs_read = False
 
 global CURRENT_VERSION
@@ -51,12 +49,12 @@ class Logger(object):
     log stdout to debug_inp.log
     """
     def __init__(self,clr_output=True):
-        global usr_configs_read, data_output_path
+        global usr_configs_read, data_dir
         self.clr_output = clr_output
         self.terminal = sys.stdout
         log_file = "demag_gui_au.log"
         if usr_configs_read:
-            log_file = os.path.join(data_output_path,log_file)
+            log_file = os.path.join(data_dir,log_file)
         self.log = open(log_file, "a+")
         self.log.write(
             '\n{:-^80}\n\n'.format('  Starting session at {}  '.format(asctime())))
@@ -118,7 +116,7 @@ class Demag_GUIAU(dgl.Demag_GUI):
             self.WD = os.getcwd()
         else:
             self.WD = os.path.realpath(os.path.expanduser(WD))
-        WD_short = self.shortpath(self.WD)
+        WD_short = shortpath(self.WD)
         if not os.path.isdir(self.WD):
             print(f"-E- Working directory {WD_short} does not exist. ")
         print(f"-I- Working directory set to {WD_short}")
@@ -242,7 +240,7 @@ class Demag_GUIAU(dgl.Demag_GUI):
         if usr_configs_read and sys.platform.startswith("darwin"):
             self.icon = wx.Icon()
             self.icon.LoadFile(
-                    os.path.join(pkg_dir, "dmgui_au", "images",
+                    os.path.join(pkg_dir, "images",
                         "dmg_au_icon.icns"),
                     type=wx.BITMAP_TYPE_ICON, desiredWidth=1024,
                     desiredHeight=1024)
@@ -252,7 +250,7 @@ class Demag_GUIAU(dgl.Demag_GUI):
         elif usr_configs_read and sys.platform.startswith("win"):
             self.icon = wx.Icon()
             self.icon.LoadFile(
-                    os.path.join(pkg_dir, "dmgui_au", "images",
+                    os.path.join(pkg_dir, "images",
                         "dmg_au_icon.ico"),
                     type=wx.BITMAP_TYPE_ICO, desiredWidth=1024,
                     desiredHeight=1024)
@@ -263,9 +261,9 @@ class Demag_GUIAU(dgl.Demag_GUI):
     #  static methods  #
     ####################
 
-    @staticmethod
-    def shortpath(abspath):
-        return abspath.replace(os.path.expanduser('~') + os.sep, '~/', 1)
+    # @staticmethod
+    # def shortpath(abspath):
+    #     return abspath.replace(os.path.expanduser('~') + os.sep, '~/', 1)
 
     @staticmethod
     def delete_magic_files(self, WD, data_model=3.0):
@@ -327,7 +325,7 @@ class Demag_GUIAU(dgl.Demag_GUI):
         lines = inp_file.read().splitlines()
         inp_file.close()
         all_sam_files = [
-                self.shortpath(x.split('\t')[0]) for x in lines[2:]]
+                shortpath(x.split('\t')[0]) for x in lines[2:]]
         if len(all_sam_files)==1:
             sam_files = os.path.dirname(all_sam_files[0])
         else:
@@ -405,13 +403,13 @@ class Demag_GUIAU(dgl.Demag_GUI):
             self.go_live.SetLabel("Go Live")
 
     def on_new_inp(self):
-        print("-I- Reading from .inp file %s"%(self.shortpath(self.inp_file)))
+        print("-I- Reading from .inp file %s"%(shortpath(self.inp_file)))
         inp = open(self.inp_file, "r")
         inp_lines = inp.read().splitlines()[2:]
         inp.close()
         for inp_line in inp_lines:
             print("-I- Tracking updates at %s" %
-                  (self.shortpath(inp_line.split('\t')[0])))
+                  (shortpath(inp_line.split('\t')[0])))
 
         # initialize acceptence criteria with NULL values
         self.acceptance_criteria = self.read_criteria_file()
@@ -942,10 +940,10 @@ def main():
     kwargs = {}
     if any(x in sys.argv for x in ["-h","--help"]):
         help(dgl); sys.exit()
-    global data_output_path, usr_configs_read
+    global data_dir, usr_configs_read
     if usr_configs_read:
         print('-I- Successfully read in user configs and local paths')
-        kwargs['WD'] = data_output_path
+        kwargs['WD'] = data_dir
 
     if "-WD" in sys.argv:
         wd_ind = sys.argv.index("-WD")

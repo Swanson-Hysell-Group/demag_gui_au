@@ -1,6 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+global top_dir,pkg_dir,data_dir,data_src,inp_dir
+from dmgui_au import pkg_dir, data_dir, data_src, inp_dir
+print(pkg_dir, data_dir)
+# from utilities import *
+# print(MYCONSTANT)
+# from ..dmgui_au import data_output_path, data_dir, inp_dir
+# print(data_output_path, data_dir, inp_dir)
 # from ..utilities import shortpath
 # print(shortpath('~'))
 # import sys

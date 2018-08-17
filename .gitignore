@@ -5,8 +5,8 @@
 # .inp and MagIC files
 data/
 
-# config directory (created by setup.py)
-config/
+# config file (created by setup.py)
+dmgui_au.conf
 
 tags
 

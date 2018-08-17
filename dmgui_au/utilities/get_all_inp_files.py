@@ -27,21 +27,18 @@ OPTIONS
 import os
 import sys
 import shutil
-import warnings
 from dmgui_au.utilities import find_dropbox
-global data_dir, inp_dir, data_output_path, usr_configs_read
+global top_dir, pkg_dir, data_dir, data_src, inp_dir, usr_configs_read
 try: # get path names if set
-    import dmgui_au.config.user as user
-    path_conf = user.demaggui_user
-    data_dir = path_conf['data_dir']
-    inp_dir = path_conf['inp_dir']
-    data_output_path = path_conf['magic_out']
+    from dmgui_au import pkg_dir, data_dir, data_src, inp_dir
     usr_configs_read = True
 except:
-    warnings.warn("Local paths used by this package have not been defined; please run the script setup.py")
+    # if setup.py is running, don't issue warning
+    if sys.argv[0] != 'setup.py':
+        print("-W- Local path names have not been set. Please run setup.py")
     usr_configs_read = False
 
-def get_all_inp_files(WD = '.', output_path = '.', inp_dir = '.', nocopy = False):
+def get_all_inp_files(WD='.', output_path='.', inp_dir='.', nocopy = False):
     """
     Retrieve all .inp files within the directory WD
 
@@ -73,7 +70,7 @@ def get_all_inp_files(WD = '.', output_path = '.', inp_dir = '.', nocopy = False
 
         for root, dirs, files in os.walk(WD):
             for d in dirs:
-                all_inp_files += get_all_inp_files(os.path.join(root, d),output_path,inp_dir,nocopy)
+                get_all_inp_files(os.path.join(root, d),output_path,inp_dir,nocopy)
 
             for f in files:
                 if f.endswith(".inp") and not f.startswith(".") and f not in map(
@@ -93,6 +90,7 @@ def get_all_inp_files(WD = '.', output_path = '.', inp_dir = '.', nocopy = False
         raise RuntimeError(
             "Recursion depth exceded, please use different working "
             "directory. There are too many sub-directeries to walk")
+
 
 if __name__ == "__main__":
     for flg in ['-h', '--help']:
@@ -115,8 +113,8 @@ if __name__ == "__main__":
             print("Top search directory set to Dropbox folder:\n\n%s\n\n"%(WD))
     if usr_configs_read:
         print('-I- Successfully read in user configs and local paths')
-        WD = data_dir
-        output_path = data_output_path
+        WD = data_src
+        output_path = data_dir
         inp_dir = inp_dir
 
     print("""\
@@ -125,6 +123,5 @@ if __name__ == "__main__":
         Main data directory: {}
         Inp repository: {}
         Copy files = {}
-            """.format(data_dir,data_output_path,inp_dir,str(not nocopy)))
-
+            """.format(data_src,data_dir,inp_dir,str(not nocopy)))
     get_all_inp_files(WD, output_path, inp_dir, nocopy=nocopy)
