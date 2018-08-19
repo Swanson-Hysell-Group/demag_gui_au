@@ -9,3 +9,15 @@ It should eventually implement:
     4) most recently edited files
         (stream data from magnetometer; referred to in demag_gui_au as 'go live')
 
+Other notes:
+    tree -I "*pycache*|*pyc|old|tags|*todo*" --matchdirs demag_gui_au/
+
+demag_gui_au/
+├── README.md
+├── data
+│   ├── all_inp_files.txt
+│   └── inp_files
+├── dmgui_au
+│   └── dmgui_au.conf
+├── setup.log
+└── setup.py

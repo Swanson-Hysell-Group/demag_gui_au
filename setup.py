@@ -1,11 +1,64 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""setup.py
+
+This is a basic setup script for Demag GUI Autoupdate. It functions mainly to
+resolve path names to the data files on your machine (saved to dmgui_au.conf)
+and retrieve data from the *.inp files of data directories. These files contain
+site-specific information that allow the GUI to convert these data to
+MagIC-formatted files (written locally to the data repository of this package,
+'demag_gui_au/data') and monitor changes to the original remote directories in
+order to update the local MagIC files whenever new data becomes available.
+
+
+Usage
+-----
+The setup script can simply be run by::
+
+    $ python setup.py [--quiet]
+
+The optional ``quiet`` flag will limit printed messages to headings, warnings
+and errors (all messages will still be written to ``setup.log``). If your local
+data files are synced by Dropbox, this script can find this location
+automatically with the additional 'dropbox' flag::
+
+    $ python setup.py dropbox [--quiet]
+
+The ``clean`` sub-command will clear the output of the output configuration file
+``dmgui_au.conf``. The ``--all`` option will also wipe the entire ``data``
+directory created by this script (see *Output* section)::
+
+    $ python setup.py cleanup [--all]
+
+
+Output
+-------
+If not previously run, the script will create the ``data`` directory tree within
+the top level of the ``demag_gui_au`` directory. All ``*.inp`` files found will
+be copied to ``data/inp_files`` with a composite record of these files output to
+``all_inp_files.txt``. Path names will be stored within the INI-style
+configuration file ``dmgui_au.conf``. A full log for the script is written to
+``setup.log``.
+
+demag_gui_au/
+├── data
+│   ├── all_inp_files.txt
+│   └── inp_files
+├── dmgui_au
+│   └── dmgui_au.conf
+├── setup.log
+└── setup.py
+
+The original directory structure can be reset with the ``clean --all`` option.
+
+
+"""
 
 import sys
 import os
 import shutil
 import configparser
-import argparse
+# import argparse
 from contextlib import ContextDecorator
 from time import asctime
 import traceback
@@ -13,14 +66,8 @@ import traceback
 from dmgui_au.utilities import find_dropbox, shortpath, get_all_inp_files, debug_inp
 
 
-
-class Logger(object):
-    """
-    Logger that redirects all standard output and any unhandled exceptions to file
-    `setup.log`. It will also return output to the terminal by default, unless
-    the --quiet option was specified during setup.
-    """
-    # define colors for output to terminal
+# define colors for output to terminal
+class logclr:
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
     OKGREEN = '\033[92m'
@@ -29,53 +76,81 @@ class Logger(object):
     ENDC = '\033[0m'
     BOLD = '\033[1m'
 
-    def __init__(self, show=None, clr_output=True):
+
+class Logger(object):
+    """
+    Logger that redirects all standard output and any unhandled exceptions to file
+    `setup.log`. It will also return output to the terminal by default, unless
+    the --quiet option was specified during setup.
+    """
+
+    def __init__(self, show=None, quiet=False, clr_output=True):
+        self.quiet = quiet
         self.clr_output = clr_output
         self.terminal = sys.stdout
         self.log = open("setup.log", "w+")
         self.log.write('\n{:-^80}\n\n'.format('  Started setup at {}  '.format(asctime())))
-        # the show attribute was meant to trim the terminal output to a more
-        # reasonable length, although it didn't really help at all in the end
-        # and isn't useful enough to keep in
-        #
-        # if isinstance(show, str):
-        #     self.show = [show]
-        # else:
-        #     self.show = show
+        self.dbcounter = 0
 
     def write(self, message):
-        if self.clr_output:
-            if '---' in str(message):
-                self.terminal.write(BOLD)
-            elif '-I-' in str(message):
-                self.terminal.write(OKGREEN)
-            elif '-W-' in str(message):
-                self.terminal.write(WARNING)
-            elif '-E-' in str(message):
-                self.terminal.write(FAIL)
-            elif str(message).startswith(' | '):
+        self.log.write(message)
+        self.terminal.flush()
+        new_msg = "\n".join(str(message).splitlines())
+        msg_lvl = 0
+        # if self.clr_output:
+        if '---' in str(message):
+            self.terminal.write(logclr.BOLD)
+            msg_lvl = 1
+        elif '-E-' in str(message):
+            self.terminal.write(logclr.FAIL)
+            msg_lvl = 2
+        elif '-W-' in str(message):
+            self.terminal.write(logclr.WARNING)
+            msg_lvl = 3
+        elif '-I-' in str(message):
+            self.terminal.write(logclr.OKGREEN)
+            # filter out debug_inp messages if quiet
+            if any([x in str(message) for x in ('Running', 'Writing')]):
+                msg_lvl = 5
+            else:
+                msg_lvl = 4
+        elif str(message).startswith(' | '):
+            self.terminal.write(logclr.OKBLUE)
+            msg_lvl = 6
+        if self.quiet:
+            if msg_lvl < 4:
+                self.terminal.write(str("\n") + new_msg)
+        else:
+            self.terminal.write(str("\n") + new_msg)
+        self.terminal.write(logclr.ENDC)
+        # self.terminal.flush()
+
                 # msg_filt = filter(lambda x: any([y in x for y in self.show]),
                 #                   str(message).splitlines())
                 # message = "\n".join(msg_filt)
-                self.terminal.write(OKBLUE)
-        self.terminal.write(message)
-        if self.clr_output:
-            self.terminal.write(ENDC)
-        self.log.write(message)
+                # if not self.quiet:
+                #     self.terminal.write(new_msg)
+                # msg_lvl = 5
+            # self.terminal.write(str(message))
+        # if not self.quiet or msg_lvl < 5:
+        #     self.terminal.write(message)
+        #     if self.clr_output:
+        #         self.terminal.write(logclr.ENDC)
+        # else:
+        #     self.terminal.write(str(self.dbcounter))
+        #     self.dbcounter += 1
 
     def flush(self):
-        # this flush method is needed for python 3 compatibility.
-        # this handles the flush command by doing nothing.
-        # you might want to specify some extra behavior here.
-        pass
+        self.terminal.flush()
 
 
 class loggercontext(ContextDecorator):
-    def __init__(self, show=None):
+    def __init__(self, show=None, quiet=False):
         self.show = show
+        self.quiet = quiet
 
     def __enter__(self, show=None):
-        start_logger(show=self.show)
+        start_logger(show=self.show, quiet=self.quiet)
         return self
 
     def __exit__(self, *exc):
@@ -83,14 +158,17 @@ class loggercontext(ContextDecorator):
         return False
 
 
-def start_logger(show=None):
-    sys.stdout = Logger(show=show)
+def start_logger(show=None, quiet=False):
+    sys.stdout = Logger(show=show, quiet=quiet)
 
 
 def stop_logger(*exc):
     if not any(exc):
         sys.stdout.log.write(
             '{:-^80}\n'.format('  Setup finished successfully at {}  '.format(asctime())))
+        sys.stdout.write('-I- Setup finished')
+    elif exc[0] is SystemExit:
+        pass
     else:
         sys.stdout.write('-E- Setup failed! Aborting...\n')
         sys.stdout.log.write('-E- The following error occurred:\n' +
@@ -115,22 +193,23 @@ def setup_dirs_and_files(dropbox=False):
     pkg_dir = os.path.join(top_dir, 'dmgui_au')
     configfile = os.path.join(pkg_dir, "dmgui_au.conf")
     if os.path.isfile(configfile):
-        rewrite = input("Configuration file 'dmgui_au.conf' already exists. Overwrite? (y/[n]) ")
+        print("-W- Configuration file 'dmgui_au.conf' already exists. Overwrite? (y/[n]) ")
+        rewrite = sys.stdin.readline()
         # TODO: Need to handle the case where configs have already been set, but
         # user still wants to continue with the rest of the setup <08-17-18, Luke Fairchild> #
-        if rewrite == "y":
+        if rewrite.strip().lower() in "yes":
             pass
         else:
-            print("-I- Quitting...")
+            print("-W- Quitting...")
             sys.exit()
     # find main data directory
     data_src = ''
     if dropbox:
         data_src = find_dropbox()
     if not data_src:
-        print("Enter directory (absolute path) to search for data files ([Enter] to abort):")
         while not os.path.exists(data_src):
-            data_src = input("> ")
+            print("Enter directory (absolute path) to search for data files ([Enter] to abort):")
+            data_src = sys.stdin.readline().strip()
             if not data_src:
                 print("-E- Could not find a valid path for data source. Aborting...")
                 return
@@ -149,57 +228,82 @@ def setup_dirs_and_files(dropbox=False):
                            'data_src': data_src, 'data_dir': data_dir, 'inp_dir': inp_dir}
     with open(configfile, "w") as confs:
         config.write(confs)
-    print("{:-^80}\n{:^80}\n{:-^80}".format(
-        "", "Package configuration values written to dmgui_au.conf", ""))
-    for vals in (
-            ("Base path to search for data files:", shortpath(data_src)),
-            ("MagIC file output directory:", shortpath(data_dir)),
-            ("INP directory:", shortpath(inp_dir))):
+    print("{:-^80}\n{:^80}\n{:-^80}\n".format(
+        "", "Package configuration values written to dmgui_au.conf", ""), end="\n")
+    for vals in (("Base path to search for data files:", shortpath(data_src)),
+                 ("MagIC file output directory:", shortpath(data_dir)),
+                 ("INP directory:", shortpath(inp_dir))):
         print('{0:<35} {1:<45}'.format(*vals))
     print('')
-    print('-I- Copying .inp files into data directory...')
+    print('-I- Finding .inp files...')
     fileno = get_all_inp_files(data_src, data_dir, inp_dir, nocopy=False)
-    print('-I- {} files copied!'.format(len(fileno)))
+    print("-I- {} files found! All files copied to 'data/inp_files'".format(len(fileno)))
 
-    print("-I- Validating path names and structure of .inp files. This is no "
-          "guarantee that the contents are sufficiently correct for the program "
-          "to read and properly format data files. Use the debugging script "
-          "'debug_inp.py' if there are issues.")
-
+    print("-I- Validating path names and structure of .inp files...")
+    # debug_auto = """
+    # Other values might not be
+    # correct and the program to read and properly format data files. The provided
+    # debugging script 'debug_inp.py' can be used to replace incorrect values
+    # within individual .inp files as specified by the user. However, there is
+    # some functionality for bulk debugging the 'naming convention' and 'number of
+    # terminal characters' fields for CIT files. CAUTION: this is in active
+    # development and experimental.
+    # """
+    # print("-W- This fixes the path names only. {}".format(debug_auto.ljust(4)))
+    # print("Use this now? (y/[n]): ")
+    # debug_now = sys.stdin.readline()
+    # if debug_now.strip().lower() in "yes":
+    #     for i in os.listdir(inp_dir):
+    #         debug_inp(os.path.join(inp_dir, i), noinput=True, usr_configs_read=True,
+    #                   data_src=data_src, data_dir=data_dir, inp_dir=inp_dir, nc=-1,
+    #                   term=-1)
+    # else:
+    # print("Okay, ")
     for i in os.listdir(inp_dir):
         debug_inp(os.path.join(inp_dir, i), noinput=True, usr_configs_read=True,
                   data_src=data_src, data_dir=data_dir, inp_dir=inp_dir)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Setup script for Demag GUI Autoupdate Package")
-    # parser.add_argument('-h', '--help', action='help', help='show this help message')
-    run_or_clean = parser.add_subparsers()
-    run = run_or_clean.add_parser()
-    # run = parser.add_argument_group()
-    run.add_argument('dropbox', action='store_true',
-                     help="""Set this option if main data directory is within a local
-                     Dropbox folder. This script should then configure path
-                     names for the package automatically""")
-    clean = run_or_clean.add_parser("Other")
-    # clean = parser.add_argument_group("Other functions")
-    clean.add_argument('clean', action='store_true',
-                       help="""Clear the configurations from a previous setup
-                       and remove all data files in this package""")
-    # subparsers = parser.add_subparsers(help='sub-command help')
-
-    # subparsers = parser.add_subparsers(title='subcommands',
-    #                                description='valid subcommands',
-    #                                help='additional help')
-    args = vars(parser.parse_args())
-    if args['clean']:
-        top_dir = os.path.abspath(os.path.dirname(__file__))
-        shutil.rmtree(os.path.join(top_dir, 'data'))
-        os.remove(os.path.join(top_dir, "dmgui_au", "dmgui_au.conf"))
-        os.remove(os.path.join(top_dir, "setup.log"))
+    if any(j in sys.argv for j in ['-h', '--help']):
+        help(__name__)
         sys.exit()
-    with loggercontext(show=['sam_path', 'naming_convention', 'num_terminal_char']):
-        setup_dirs_and_files(args['dropbox'])
+    if 'clean' in sys.argv:
+        top_dir = os.path.abspath(os.path.dirname(__file__))
+        try:
+            print("Deleting 'dmgui_au.conf' ...")
+            os.remove(os.path.join(top_dir, "dmgui_au", "dmgui_au.conf"))
+        except FileNotFoundError:
+            print("Config file 'dmgui_au.conf' not found")
+        if '--all' in sys.argv:
+            data_tree = os.path.join(top_dir, 'data')
+            del_data_tree = input("WARNING: This will delete everything under\n\n"
+                                  "{}\n\nContinue? (y/[n]) ".format(data_tree))
+            if del_data_tree.lower() in 'yes':
+                pass
+            else:
+                return
+            try:
+                x = "'data/'"
+                print("Deleting {} ...".format(x))
+                shutil.rmtree(data_tree)
+                x = "'setup.log'"
+                print("Deleting {} ...".format(x))
+                os.remove(os.path.join(top_dir, "setup.log"))
+            except FileNotFoundError as err:
+                print("'clean' already run?", err)
+        sys.exit()
+    if "dropbox" in sys.argv:
+        dropbox = True
+    else:
+        dropbox = False
+    if "--quiet" in sys.argv:
+        quiet = True
+    else:
+        quiet = False
+    # with loggercontext(show=['sam_path', 'naming_convention', 'num_terminal_char']):
+    with loggercontext(quiet=quiet):
+        setup_dirs_and_files(dropbox)
 
 
 if __name__ == "__main__":

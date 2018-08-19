@@ -58,7 +58,7 @@ import pmagpy.controlled_vocabularies3 as cv
 from functools import reduce
 from time import time, asctime
 from .funcs import shortpath
-# import pdb
+import pdb
 
 # global top_dir, pkg_dir, data_dir, data_src, inp_dir, usr_configs_read
 try: # get path names if set
@@ -178,10 +178,12 @@ def debug_inp(inp_file, dropbox = False, noinput=False, usr_configs_read=None,
             force_rewrite_dict[kwarg_map[key]] = value
     if any(force_rewrite_dict.values()):
         df = pd.read_csv(inp_file, sep='\t', header=1, dtype=str)
+        old_values = {}
         for key, value in force_rewrite_dict.items():
             if value is not None:
                 if int(value) == -1:
                     print("\n-I- Resetting {} to NULL...".format(key))
+                    old_values[key] = df.ix[0][key]
                     df.ix[0][key]=None
                 else:
                     print("\n-I- Setting {} to {}...".format(key, value))
@@ -301,8 +303,12 @@ def debug_inp(inp_file, dropbox = False, noinput=False, usr_configs_read=None,
         if pd.isna(nc): # force rewrite
             site_name = os.path.basename(os.path.dirname(sam_path))
             if site_name not in sl[0]:
-                site_name = input("Trouble with site name {} -- does not match samples (e.g. {}).\n"
-                        "Input correct site name: ".format(site_name,sl[0]))
+                if noinput:
+                    print("-W- Trouble with site name {} -- does not match samples (e.g. {}).".format(site_name,sl[0]))
+                    print("-W- Naming convention reset to old value of {}".format(old_values['naming_convention']))
+                else:
+                    site_name = input("Trouble with site name {} -- does not match samples (e.g. {}).\n"
+                            "Input correct site name: ".format(site_name,sl[0]))
 
             # catch delimeter if it is appended to site name (sometimes the case)
             if not site_name[-1].isalnum():
@@ -324,8 +330,13 @@ def debug_inp(inp_file, dropbox = False, noinput=False, usr_configs_read=None,
                 new_nc = nc
                 df.ix[i]['naming_convention']=str(new_nc)
             else:
-                nc = input(nc_info_str)
-                new_nc = nc
+                if noinput:
+                    print("-W- Could not determine correct naming convention...resetting to old value of {}".format(old_values['naming_convention']))
+                    nc = old_values['naming_convention']
+                    new_nc = nc
+                else:
+                    nc = input(nc_info_str)
+                    new_nc = nc
                 df.ix[i]['naming_convention']=str(new_nc)
 
         if int(nc) > 7 or int(nc) < 1:
@@ -337,14 +348,25 @@ def debug_inp(inp_file, dropbox = False, noinput=False, usr_configs_read=None,
             nt_ctr = 0
             lastchar = pd.Series([t[-1] for t in sl])
             the_rest = pd.Series([t[0:-1] for t in sl])
+            # nt_rename_timeout = 0
             while True:
                 if len(the_rest)==len(the_rest.unique()) and len(lastchar.unique())<3:
-                    nt_ctr += 1
-                    lastchar = pd.Series([t[-1] for t in the_rest])
-                    the_rest = pd.Series([t[0:-1] for t in the_rest])
+                    try:
+                        nt_ctr += 1
+                        lastchar = pd.Series([t[-1] for t in the_rest])
+                        the_rest = pd.Series([t[0:-1] for t in the_rest])
+                    except IndexError:
+                        pdb.set_trace()
                 else:
                     break
-            nt_confirm = input("Guessing that the number of terminal characters = {} based on sample names like:\n{:^15}{:^15}{:^15}{:^15}\n\nPress enter to confirm or enter the correct number here: ".format(nt_ctr, *sl[:4]))
+            if noinput:
+                try:
+                    print("Guessing that the number of terminal characters = {} based on sample names like:\n{:^15}{:^15}{:^15}{:^15}".format(nt_ctr, *sl[:4]))
+                except IndexError:
+                    print("Guessing that the number of terminal characters = {}".format(nt_ctr))
+                nt_confirm = ''
+            else:
+                nt_confirm = input("Guessing that the number of terminal characters = {} based on sample names like:\n{:^15}{:^15}{:^15}{:^15}\n\nPress enter to confirm or enter the correct number here: ".format(nt_ctr, *sl[:4]))
             if nt_confirm=='':
                 new_nt = str(nt_ctr)
             else:
