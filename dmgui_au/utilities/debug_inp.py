@@ -57,11 +57,11 @@ import pmagpy.controlled_vocabularies2 as cv2
 import pmagpy.controlled_vocabularies3 as cv
 from functools import reduce
 from time import time, asctime
-from .funcs import shortpath
+from dmgui_au.utilities import shortpath
 import pdb
 
 # global top_dir, pkg_dir, data_dir, data_src, inp_dir, usr_configs_read
-try: # get path names if set
+try:  # get path names if set
     from dmgui_au import pkg_dir, data_dir, data_src, inp_dir
     usr_configs_read = True
 except:
@@ -393,24 +393,28 @@ def debug_inp(inp_file, dropbox = False, noinput=False, usr_configs_read=None,
         inp_out.write("CIT\r\n")
         df.to_csv(inp_out, sep="\t", header=True, index=False)
 
+
 def main():
-    parser = argparse.ArgumentParser(description="Debug .inp files.", add_help=False)
+    parser = argparse.ArgumentParser(description="Debug .inp files.",
+                                     add_help=False)
     parser.add_argument('-h', action='help',
-            help='show short (-h) or detailed (--help) help message')
-    parser.add_argument('inp_file', nargs='*')#, type=)#, default=sys.stdin)
-    parser.add_argument('-dx','--dropbox', action='store_true')
+                        help='show short (-h) or detailed (--help) help message')
+    parser.add_argument('inp_file', nargs='*')  # , type=)#, default=sys.stdin)
+    parser.add_argument('-dx', '--dropbox', action='store_true')
     parser.add_argument('--sam_path')
     parser.add_argument('--magic_codes')
     parser.add_argument('--nc')
     parser.add_argument('--term')
     parser.add_argument('--no_ave')
     parser.add_argument('--peak_AF')
-    parser.add_argument('--noinput', action='store_true', help='bypass all input()')
+    parser.add_argument('--noinput', action='store_true',
+                        help='bypass all input()')
     parser.add_argument('--help', dest='help_long', action='store_const',
-            const=True, help = argparse.SUPPRESS)
+                        const=True, help=argparse.SUPPRESS)
     args = vars(parser.parse_args())
     if args['help_long']:
-        help(__name__); sys.exit()
+        help(__name__)
+        sys.exit()
     start_logger()
     inp_file_list = args.pop('inp_file')
     for filename_inp in inp_file_list:

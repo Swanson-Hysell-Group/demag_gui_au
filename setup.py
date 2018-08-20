@@ -88,14 +88,24 @@ class Logger(object):
         self.quiet = quiet
         self.clr_output = clr_output
         self.terminal = sys.stdout
+        self.quiet_count = 0
         self.log = open("setup.log", "w+")
         self.log.write('\n{:-^80}\n\n'.format('  Started setup at {}  '.format(asctime())))
-        self.dbcounter = 0
+        self.msg_to_term = True  # send output at start, even if --quiet
 
     def write(self, message):
+        """main write method for redirection of sys.stdout"""
+        # first classify the message content to determine whether it should be
+        # written to the console in addition to being logged
+        if self.msg_to_term or "-W-" in str(message) or "-E-" in str(message):
+            # should always evaluate True if quiet==False; if quiet==True,
+            # should only evaluate True when printing initial messages during
+            # file copy and during warnings/errors
+            self.msg_to_term = self.msg_type(message)
         self.log.write(message)
-        self.terminal.flush()
-        new_msg = "\n".join(str(message).splitlines())
+
+    def msg_type(self, message):
+        """classify the message and color output to console"""
         msg_lvl = 0
         # if self.clr_output:
         if '---' in str(message):
@@ -118,11 +128,18 @@ class Logger(object):
             self.terminal.write(logclr.OKBLUE)
             msg_lvl = 6
         if self.quiet:
-            if msg_lvl < 4:
-                self.terminal.write(str("\n") + new_msg)
+            if msg_lvl < 5:
+                self.terminal.write(message)
+            else:
+                return False
         else:
-            self.terminal.write(str("\n") + new_msg)
+            self.terminal.write(message)
         self.terminal.write(logclr.ENDC)
+        return True
+
+    def flush(self):
+        self.terminal.flush()
+
         # self.terminal.flush()
 
                 # msg_filt = filter(lambda x: any([y in x for y in self.show]),
@@ -140,8 +157,6 @@ class Logger(object):
         #     self.terminal.write(str(self.dbcounter))
         #     self.dbcounter += 1
 
-    def flush(self):
-        self.terminal.flush()
 
 
 class loggercontext(ContextDecorator):
@@ -166,15 +181,19 @@ def stop_logger(*exc):
     if not any(exc):
         sys.stdout.log.write(
             '{:-^80}\n'.format('  Setup finished successfully at {}  '.format(asctime())))
-        sys.stdout.write('-I- Setup finished')
+        finished=True
     elif exc[0] is SystemExit:
+        finished=False
         pass
     else:
         sys.stdout.write('-E- Setup failed! Aborting...\n')
         sys.stdout.log.write('-E- The following error occurred:\n' +
                              ''.join(traceback.format_exception(*exc)))
+        finished=False
     sys.stdout.log.close()
     sys.stdout = sys.__stdout__
+    if finished:
+        print("Setup finished! Full record written to setup.log")
 
 
 def setup_dirs_and_files(dropbox=False):
