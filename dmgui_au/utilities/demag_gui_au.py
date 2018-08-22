@@ -531,7 +531,11 @@ class Demag_GUIAU(dgl.Demag_GUI):
             update_needed = self.read_inp(
                 self.WD, inp_file_name, magic_files, data_model)
         if update_needed or force_update:
-            self.reset_backend()
+            print("-I- Resetting...")
+            self.combine_magic_files(self.WD, magic_files,
+                                     data_model=data_model)
+            CallAfter(self.reset_backend, warn_user=False, reset_interps=False)
+            print("-I- Reset")
 
     def get_all_inp_files(self, WD=None):
         WD = os.path.abspath(WD)
