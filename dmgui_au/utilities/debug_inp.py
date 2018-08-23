@@ -181,7 +181,7 @@ def debug_inp(inp_file, dropbox = False, noinput=False, usr_configs_read=None,
         old_values = {}
         for key, value in force_rewrite_dict.items():
             if value is not None:
-                if int(value) == -1:
+                if int(str(value)) == -1:
                     print("\n-I- Resetting {} to NULL...".format(key))
                     old_values[key] = df.ix[0][key]
                     df.ix[0][key]=None
@@ -298,6 +298,8 @@ def debug_inp(inp_file, dropbox = False, noinput=False, usr_configs_read=None,
             sl = sl[2:]
         else:
             sl = sl[3:]
+        if '' in sl:
+            sl.remove('')
 
         nc = df.ix[i]['naming_convention']
         if pd.isna(nc): # force rewrite
