@@ -28,7 +28,7 @@ The ``clean`` sub-command will clear the output of the output configuration file
 ``dmgui_au.conf``. The ``--all`` option will also wipe the entire ``data``
 directory created by this script (see *Output* section)::
 
-    $ python setup.py cleanup [--all]
+    $ python setup.py clean [--all]
 
 
 Output
