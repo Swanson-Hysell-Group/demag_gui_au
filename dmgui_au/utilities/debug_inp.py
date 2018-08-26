@@ -187,7 +187,9 @@ def debug_inp(inp_file, dropbox = False, noinput=False, usr_configs_read=None,
                     df.ix[0][key]=None
                 else:
                     print("\n-I- Setting {} to {}...".format(key, value))
-                    df.ix[0][key]=str(value)
+                    # df.ix[0][key]=str(value)
+                    print(df.ix[0][key])
+                    df.ix[0][key] = value
         inp_out = open(inp_file, 'w+')
         inp_out.write("CIT\r\n")
         df.to_csv(inp_out, sep="\t", header=True, index=False)

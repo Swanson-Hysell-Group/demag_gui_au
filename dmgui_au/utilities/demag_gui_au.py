@@ -763,7 +763,13 @@ class Demag_GUIAU(dgl.Demag_GUI):
             return
 
         if data_model == 3.0:
+            # try:
             if 'measurements' in magic_files.keys():
+                for dot_magic in magic_files['measurements']:
+                    if not os.path.isfile(dot_magic):
+                        magic_files['measurements'].remove(dot_magic)
+                        print('No data for {}'.format(dot_magic))
+                print(magic_files['measurements'])
                 combine_magic(magic_files['measurements'], os.path.join(
                     WD, "measurements.txt"))
 
@@ -782,6 +788,8 @@ class Demag_GUIAU(dgl.Demag_GUI):
             if 'locations' in magic_files.keys():
                 combine_magic(magic_files['locations'],
                               os.path.join(WD, "locations.txt"))
+            # except FileNotFoundError:
+                # pass
         else:
             if 'measurements' in magic_files.keys():
                 combine_magic(magic_files['measurements'], os.path.join(

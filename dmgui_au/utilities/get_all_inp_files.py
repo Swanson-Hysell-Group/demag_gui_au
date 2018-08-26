@@ -24,6 +24,7 @@ OPTIONS
 # pdb.set_trace()
 import os
 import sys
+from string import ascii_uppercase
 import shutil
 import argparse
 from dmgui_au.utilities import find_dropbox
@@ -83,20 +84,25 @@ def get_all_inp_files(data_src='.', data_dir='.', inp_dir='.', nocopy = False):
                 elif already_recorded and not any(map(lambda x: os.path.samefile(os.path.join(root, f), x), all_inp_files)):
                     # add to main list so that full path to the unique file is
                     # recorded
-                    all_inp_files.append(os.path.join(root, f))
+                    # all_inp_files.append(os.path.join(root, f))
                     # compile name conflicts in a dictionary
-                    name_conflicts[f]=[x for x in all_inp_files if f in os.path.split(x)[1]]
-
+                    # name_conflicts[f]=[x for x in all_inp_files if f in os.path.split(x)[1]]
+                    if f in name_conflicts.keys():
+                        name_conflicts[f].append(os.path.join(root,f))
+                    else:
+                        name_conflicts[f] = [os.path.join(root,f)]
+                    # name_conflicts[f]=[x for x in all_inp_files if f in os.path.split(x)[1]]
         out_file = open(os.path.join(data_dir, "all_inp_files.txt"), "w")
+        # print(name_conflicts)
         for inp in all_inp_files:
             out_file.write(inp+'\n')
-            if os.path.split(inp)[1] in name_conflicts.keys():
-                for conflicted in name_conflicts[os.path.split(inp)[1]]:
-                    if conflicted != inp:
-                        out_file.write('## CONFLICTS WITH {}\n'.format(conflicted))
-                print("-I- There are conflicting file names for {}. These "
-                      "have been marked in all_inp_files.txt and will not be "
-                      "copied".format(os.path.split(inp)[1]))
+            # if os.path.split(inp)[1] in name_conflicts.keys():
+            #     for conflicted in name_conflicts[os.path.split(inp)[1]]:
+            #         if conflicted != inp:
+            #             out_file.write('## CONFLICTS WITH {}\n'.format(conflicted))
+            #     print("-I- There are conflicting file names for {}. These "
+            #           "have been marked in all_inp_files.txt and will not be "
+            #           "copied".format(os.path.split(inp)[1]))
             if not nocopy:
                 # TODO: Check to see if file already exists before copying
                 # <08-14-18, Luke Fairchild> #
@@ -121,6 +127,15 @@ def get_all_inp_files(data_src='.', data_dir='.', inp_dir='.', nocopy = False):
                 inp_copy = shutil.copy(inp, inp_dir)
                 # set adequate permissions of the copied files
                 os.chmod(inp_copy, 0o666)
+                # copy conflicts
+                # if os.path.split(inp)[1] in name_conflicts.keys():
+                #     conflict_files = name_conflicts[os.path.split(inp)[1]]
+                #     for i, conflict_file in enumerate(conflict_files):
+                #         conflict_name = os.path.basename(inp).replace('.inp', ascii_uppercase[i]+'.inp')
+                #         print('-I- Conflict file {} copied as {}'.format(inp,conflict_name))
+                #         inp_conflict = shutil.copy(conflict_file, os.path.join(inp_dir,conflict_name))
+                #         os.chmod(inp_conflict, 0o666)
+
         out_file.close()
         return all_inp_files
     except RuntimeError:
