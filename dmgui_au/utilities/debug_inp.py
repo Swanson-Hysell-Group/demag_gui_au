@@ -57,11 +57,11 @@ import pmagpy.controlled_vocabularies2 as cv2
 import pmagpy.controlled_vocabularies3 as cv
 from functools import reduce
 from time import time, asctime
-from .funcs import shortpath
-# import pdb
+from dmgui_au.utilities import shortpath
+import pdb
 
 # global top_dir, pkg_dir, data_dir, data_src, inp_dir, usr_configs_read
-try: # get path names if set
+try:  # get path names if set
     from dmgui_au import pkg_dir, data_dir, data_src, inp_dir
     usr_configs_read = True
 except:
@@ -178,14 +178,18 @@ def debug_inp(inp_file, dropbox = False, noinput=False, usr_configs_read=None,
             force_rewrite_dict[kwarg_map[key]] = value
     if any(force_rewrite_dict.values()):
         df = pd.read_csv(inp_file, sep='\t', header=1, dtype=str)
+        old_values = {}
         for key, value in force_rewrite_dict.items():
             if value is not None:
-                if int(value) == -1:
+                if int(str(value)) == -1:
                     print("\n-I- Resetting {} to NULL...".format(key))
+                    old_values[key] = df.ix[0][key]
                     df.ix[0][key]=None
                 else:
                     print("\n-I- Setting {} to {}...".format(key, value))
-                    df.ix[0][key]=str(value)
+                    # df.ix[0][key]=str(value)
+                    print(df.ix[0][key])
+                    df.ix[0][key] = value
         inp_out = open(inp_file, 'w+')
         inp_out.write("CIT\r\n")
         df.to_csv(inp_out, sep="\t", header=True, index=False)
@@ -296,13 +300,19 @@ def debug_inp(inp_file, dropbox = False, noinput=False, usr_configs_read=None,
             sl = sl[2:]
         else:
             sl = sl[3:]
+        if '' in sl:
+            sl.remove('')
 
         nc = df.ix[i]['naming_convention']
         if pd.isna(nc): # force rewrite
             site_name = os.path.basename(os.path.dirname(sam_path))
             if site_name not in sl[0]:
-                site_name = input("Trouble with site name {} -- does not match samples (e.g. {}).\n"
-                        "Input correct site name: ".format(site_name,sl[0]))
+                if noinput:
+                    print("-W- Trouble with site name {} -- does not match samples (e.g. {}).".format(site_name,sl[0]))
+                    print("-W- Naming convention reset to old value of {}".format(old_values['naming_convention']))
+                else:
+                    site_name = input("Trouble with site name {} -- does not match samples (e.g. {}).\n"
+                            "Input correct site name: ".format(site_name,sl[0]))
 
             # catch delimeter if it is appended to site name (sometimes the case)
             if not site_name[-1].isalnum():
@@ -324,8 +334,13 @@ def debug_inp(inp_file, dropbox = False, noinput=False, usr_configs_read=None,
                 new_nc = nc
                 df.ix[i]['naming_convention']=str(new_nc)
             else:
-                nc = input(nc_info_str)
-                new_nc = nc
+                if noinput:
+                    print("-W- Could not determine correct naming convention...resetting to old value of {}".format(old_values['naming_convention']))
+                    nc = old_values['naming_convention']
+                    new_nc = nc
+                else:
+                    nc = input(nc_info_str)
+                    new_nc = nc
                 df.ix[i]['naming_convention']=str(new_nc)
 
         if int(nc) > 7 or int(nc) < 1:
@@ -337,14 +352,25 @@ def debug_inp(inp_file, dropbox = False, noinput=False, usr_configs_read=None,
             nt_ctr = 0
             lastchar = pd.Series([t[-1] for t in sl])
             the_rest = pd.Series([t[0:-1] for t in sl])
+            # nt_rename_timeout = 0
             while True:
                 if len(the_rest)==len(the_rest.unique()) and len(lastchar.unique())<3:
-                    nt_ctr += 1
-                    lastchar = pd.Series([t[-1] for t in the_rest])
-                    the_rest = pd.Series([t[0:-1] for t in the_rest])
+                    try:
+                        nt_ctr += 1
+                        lastchar = pd.Series([t[-1] for t in the_rest])
+                        the_rest = pd.Series([t[0:-1] for t in the_rest])
+                    except IndexError:
+                        pdb.set_trace()
                 else:
                     break
-            nt_confirm = input("Guessing that the number of terminal characters = {} based on sample names like:\n{:^15}{:^15}{:^15}{:^15}\n\nPress enter to confirm or enter the correct number here: ".format(nt_ctr, *sl[:4]))
+            if noinput:
+                try:
+                    print("Guessing that the number of terminal characters = {} based on sample names like:\n{:^15}{:^15}{:^15}{:^15}".format(nt_ctr, *sl[:4]))
+                except IndexError:
+                    print("Guessing that the number of terminal characters = {}".format(nt_ctr))
+                nt_confirm = ''
+            else:
+                nt_confirm = input("Guessing that the number of terminal characters = {} based on sample names like:\n{:^15}{:^15}{:^15}{:^15}\n\nPress enter to confirm or enter the correct number here: ".format(nt_ctr, *sl[:4]))
             if nt_confirm=='':
                 new_nt = str(nt_ctr)
             else:
@@ -371,24 +397,28 @@ def debug_inp(inp_file, dropbox = False, noinput=False, usr_configs_read=None,
         inp_out.write("CIT\r\n")
         df.to_csv(inp_out, sep="\t", header=True, index=False)
 
+
 def main():
-    parser = argparse.ArgumentParser(description="Debug .inp files.", add_help=False)
+    parser = argparse.ArgumentParser(description="Debug .inp files.",
+                                     add_help=False)
     parser.add_argument('-h', action='help',
-            help='show short (-h) or detailed (--help) help message')
-    parser.add_argument('inp_file', nargs='*')#, type=)#, default=sys.stdin)
-    parser.add_argument('-dx','--dropbox', action='store_true')
+                        help='show short (-h) or detailed (--help) help message')
+    parser.add_argument('inp_file', nargs='*')  # , type=)#, default=sys.stdin)
+    parser.add_argument('-dx', '--dropbox', action='store_true')
     parser.add_argument('--sam_path')
     parser.add_argument('--magic_codes')
     parser.add_argument('--nc')
     parser.add_argument('--term')
     parser.add_argument('--no_ave')
     parser.add_argument('--peak_AF')
-    parser.add_argument('--noinput', action='store_true', help='bypass all input()')
+    parser.add_argument('--noinput', action='store_true',
+                        help='bypass all input()')
     parser.add_argument('--help', dest='help_long', action='store_const',
-            const=True, help = argparse.SUPPRESS)
+                        const=True, help=argparse.SUPPRESS)
     args = vars(parser.parse_args())
     if args['help_long']:
-        help(__name__); sys.exit()
+        help(__name__)
+        sys.exit()
     start_logger()
     inp_file_list = args.pop('inp_file')
     for filename_inp in inp_file_list:

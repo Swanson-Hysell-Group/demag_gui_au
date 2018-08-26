@@ -12,12 +12,15 @@ except:
 
 def find_dropbox():
     """
-    Attempts to find the user's Dropbox folder.
-    Will additionally search for Hargraves_Data folder in the top directory.
+    Attempts to find local Dropbox folder using json file that Dropbox writes to
+    users' home directory. Will additionally search for `Hargraves_Data` folder
+    in the top directory (UC Berkeley Pmag Lab).
 
     Returns
     -------
-    Path to Dropbox
+    string
+        Absolute path to Dropbox folder or subfolder, or another path given by
+        user input. If
 
     """
     if os.path.isfile(os.path.expanduser(os.path.join("~", ".dropbox", "info.json"))):
@@ -39,14 +42,21 @@ def find_dropbox():
                 drpbx_dict = drpbx_dict[drpbx_acts[n]]
             else:
                 drpbx_dict = drpbx_dict[drpbx_acts[0]]
-            drpbx_path=os.path.abspath(drpbx_dict['path'])
-
+            drpbx_path = os.path.abspath(drpbx_dict['path'])
     else:
-        drpbx_path = input("""
-        There was a problem finding your Dropbox folder.
-        Please provide the path to your Dropbox folder here (press Enter to skip): )
-        """)
+        drpbx_path = ''
+        print("-W- There was a problem finding your Dropbox folder.")
+        return drpbx_path
+        # while not os.path.isdir(drpbx_path):
+        #     drpbx_path = input("Please provide the path to your Dropbox, "
+        #                        "or press [Enter] to skip and provide a d.\n> ")
+        #     if not drpbx_path:
+        #         print("-E- Failed to find Dropbox folder")
+        #         return drpbx_path
+        #     elif os.path.isdir(os.path.realpath(os.path.expanduser(drpbx_path))):
 
+
+    # for UC Berkeley lab
     if os.path.isdir(os.path.join(drpbx_path,"Hargraves_Data")):
         drpbx_path = os.path.join(drpbx_path,"Hargraves_Data")
     return drpbx_path
