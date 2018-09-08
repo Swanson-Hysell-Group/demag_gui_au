@@ -22,11 +22,10 @@ from functools import reduce
 import pmagpy.pmag as pmag
 from funcs import shortpath, cache_site_files, uncache_site_files
 
-global top_dir, pkg_dir, data_dir, data_src, inp_dir, usr_configs_read
 try:  # get path names if set
     from dmgui_au import pkg_dir, data_dir, data_src, inp_dir
     usr_configs_read = True
-except:
+except ImportError:
     # if setup.py is running, don't issue warning
     if sys.argv[0] != 'setup.py':
         print("-W- Local path names have not been set. Please run setup.py")

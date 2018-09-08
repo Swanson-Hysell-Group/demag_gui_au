@@ -2,13 +2,14 @@
 # -*- coding: utf-8 -*-
 
 import os
+import textwrap
 import argparse
 
 
 def combine_inp(inp_files, file_name='all_inp'):
     """
-    Function that combines inp files into a single inp file which allows faster
-    running of autoupdate wrapper of demag_gui.
+    Function that combines inp files into a single inp file, allowing data to be
+    conveniently grouped into custom data sets and viewed altogether.
 
     Parameters
     ----------
@@ -46,14 +47,41 @@ def combine_inp(inp_files, file_name='all_inp'):
 
 
 if __name__ == "__main__":
+    prog_desc = textwrap.dedent("""\
+    Combine .inp files so that particular data sets can be read into and viewed
+    in DemagGUI AU simultaneously. Accepts glob patterns for selecting files to
+    be combined, or file names can be given as individual arguments.""")
+
+    prog_epilog = textwrap.dedent("""\
+
+    Examples
+    --------
+    Consider a paleomagnetic study comprising 50 sites total. Each site name
+    begins with 'NE' such that the set of inp files from this study are
+    'NE1.inp', 'NE2.inp', [...] , 'NE50.inp'. As you develop data for each site,
+    you decide you want to be able to view all data together (i.e. at the
+    study-level) within DemagGUI. This can be done by combining all inp files
+    from this study (which can be selected via a simple glob pattern, e.g.
+    'NE*.inp') into a single composite inp file named, say, 'NE_study_all':
+
+        $ combine_inp_files.py --fname NE_study_all NE*.inp
+
+    Instead of providing a glob pattern, you can also simply list out the files as
+    positional arguments on the command line. This might be preferable when
+    combining a small number of sites:
+
+        $ combine_inp_files.py --fname NE1_thru_4 NE1.inp NE2.inp NE3.inp NE4.inp
+
+    Or when file names are dissimilar and you don't care to figure out what glob
+    pattern would work:
+
+        $ combine_inp_files.py --fname combined_inp CF16R.inp UF2.inp BFR-.inp py4H.inp
+
+    """)
     parser = argparse.ArgumentParser(prog="combine_inp_files.py",
-                                     description="""\
-                                     Combine .inp files so that particular data
-                                     sets can be read into and viewed within
-                                     DemagGUI AU at the same time. Accepts glob
-                                     patterns for selecting files to be
-                                     combined, or file names can be given as
-                                     individual arguments.""")
+                                     description=prog_desc,
+                                     epilog=prog_epilog,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('inp_files', nargs='*')
     parser.add_argument('--fname', dest='file_name', type=str, default="all_inp")
 

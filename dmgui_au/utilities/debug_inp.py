@@ -372,13 +372,19 @@ def debug_inp(inp_file, dropbox = False, noinput=False, usr_configs_read=None,
                     break
             if noinput:
                 try:
-                    print("Guessing that the number of terminal characters = {} based on sample names like:\n{:^15}{:^15}{:^15}{:^15}".format(nt_ctr, *sl[:4]))
+                    print("Guessing that the number of terminal "
+                          "characters = {}  based on sample names "
+                          "like:\n{:^15}{:^15}{:^15}{:^15}".format(nt_ctr, *sl[:4]))
                 except IndexError:
                     print("Guessing that the number of terminal characters = {}".format(nt_ctr))
                 nt_confirm = ''
             else:
-                nt_confirm = input("Guessing that the number of terminal characters = {} based on sample names like:\n{:^15}{:^15}{:^15}{:^15}\n\nPress enter to confirm or enter the correct number here: ".format(nt_ctr, *sl[:4]))
-            if nt_confirm=='':
+                nt_confirm = input("Guessing that the number of terminal "
+                                   "characters = {}  based on sample names "
+                                   "like:\n{:^15}{:^15}{:^15}{:^15}\n\nPress "
+                                   "enter to confirm or enter the correct number "
+                                   "here: ".format(nt_ctr, *sl[:4]))
+            if nt_confirm == '':
                 new_nt = str(nt_ctr)
             else:
                 new_nt = nt_confirm
@@ -386,21 +392,24 @@ def debug_inp(inp_file, dropbox = False, noinput=False, usr_configs_read=None,
 
         # format df for display
         with pd.option_context('display.colheader_justify', 'left', 'display.max_rows', None,
-                'display.max_columns', None, 'display.max_colwidth', -1):
+                               'display.max_columns', None, 'display.max_colwidth', -1):
             df_display = df.copy()
             df_display.sam_path = df_display.sam_path.map(shortpath)
             df_display = df_display.T
-            df_display.rename(index={'dont_average_replicate_measurements':'dont_average'},inplace=True)
-            print("\n".join([" |  {}".format(i) for i in df_display.to_string(header=False).split("\n")]))
+            df_display.rename(index={'dont_average_replicate_measurements': 'dont_average'},
+                              inplace=True)
+            print("\n".join([" |  {}".format(i)
+                             for i in df_display.to_string(header=False).split("\n")]))
 
-    print("-I- Writing to %s..."%(inp_file_name)+"\n")
+    print("-I- Writing to %s..." % (inp_file_name)+"\n")
     try:
         inp_out = open(inp_file, 'w+')
         inp_out.write("CIT\r\n")
         df.to_csv(inp_out, sep="\t", header=True, index=False)
     except IOError:
-        print("-E- Could not write to directory %s, writing to %s instead"%(directory,os.path.abspath('.')))
-        inp_out = open(os.path.join(os.path.abspath('.'),inp_file_name), 'w+')
+        print("-E- Could not write to directory %s, writing to %s instead" %
+              (directory, os.path.abspath('.')))
+        inp_out = open(os.path.join(os.path.abspath('.'), inp_file_name), 'w+')
         inp_out.write("CIT\r\n")
         df.to_csv(inp_out, sep="\t", header=True, index=False)
 
@@ -412,14 +421,14 @@ def main():
     the arguments listed below) and also supports globbing such that multiple
     files can be debugged at a time (see examples below):
 
-    args           -------->    field name in inp file
+           args    -------->    field name in inp file
     -------------------------------------------------------
-    -sampath                    sam_path
-    -magcodes                   field_magic_codes
-    -nc                         naming_convention
-    -term                       num_terminal_char
-    -noavg                      dont_average_replicate_measurements
-    -peakAF                     peak_AF
+          -sampath              sam_path
+          -magcodes             field_magic_codes
+          -nc                   naming_convention
+          -term                 num_terminal_char
+          -noavg                dont_average_replicate_measurements
+          -peakAF               peak_AF
 
     """)
 
@@ -436,14 +445,14 @@ def main():
     For a set of inp files 'Z01.inp', 'Z02.inp', [...] , 'Z160.inp', etc.,
     change the naming convention to 3 and the number of terminal characters to 1:
 
-    >>> debug_inp.py Z* -nc 3 -term 1
+        $ debug_inp.py Z* -nc 3 -term 1
 
     The particular glob needed will depend on other file names within the
     directory. In the example above, if you had another group of files
     'ZF10.inp', 'ZF20.inp', etc., you might exclude this second set by requiring
     that 'Z' is always followed by a number:
 
-    >>> debug_inp.py Z[0-9]* -nc 3 -term 1
+        $ debug_inp.py Z[0-9]* -nc 3 -term 1
 
 
     """)
