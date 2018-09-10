@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import re
 import textwrap
 import argparse
 
@@ -46,7 +47,7 @@ def combine_inp(inp_files, file_name='all_inp'):
     return True
 
 
-if __name__ == "__main__":
+def main():
     prog_desc = textwrap.dedent("""\
     Combine .inp files so that particular data sets can be read into and viewed
     in DemagGUI AU simultaneously. Accepts glob patterns for selecting files to
@@ -82,9 +83,26 @@ if __name__ == "__main__":
                                      description=prog_desc,
                                      epilog=prog_epilog,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('inp_files', nargs='*')
+    parser.add_argument('inp_files', nargs='*',
+                        help="""inp files to combine. If no file names are
+                        provided, defaults to all *.inp files within the current
+                        directory.""")
     parser.add_argument('--fname', dest='file_name', type=str, default="all_inp")
 
     args = vars(parser.parse_args())
     inp_file_list = args.pop('inp_files')
-    combine_inp(inp_file_list, **args)
+    if len(inp_file_list) == 0:
+        filt = re.compile('.*\.inp')
+        # search for inp files in CWD; the filter below excludes directories
+        for s in list(filter(os.path.isfile, os.listdir())):
+            if filt.match(s):
+                inp_file_list.append(s)
+    if len(inp_file_list) == 0:
+        print("Nothing to combine---no file names were provided, and no inp "
+              "files were found in current directory.")
+    else:
+        combine_inp(inp_file_list, **args)
+
+
+if __name__ == "__main__":
+    main()
