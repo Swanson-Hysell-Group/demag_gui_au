@@ -3,122 +3,62 @@
 
 import os
 import sys
+# import signal
+import textwrap
 # import pdb
-import programs.demag_gui as dgl
-from pmagpy.demag_gui_utilities import find_file
+# import programs.demag_gui as dgl
+from programs import demag_gui as dgl
 import programs.conversion_scripts2.cit_magic2 as cit_magic2
-import programs.conversion_scripts.cit_magic as cit_magic3
+import programs.conversion_scripts.cit_magic as cit_magic
 from pmagpy import convert_2_magic as convert
 from pmagpy.ipmag import combine_magic
 from pmagpy.demag_gui_utilities import *
 from numpy import array
-from time import time, asctime
+from time import time, asctime, sleep
 from threading import Thread
 from wx import App, CallAfter, Timer, EVT_TIMER, ID_ANY
 import wx
 import wx.adv
 from functools import reduce
 import pmagpy.pmag as pmag
-from funcs import shortpath
-
-global top_dir, pkg_dir, data_dir, data_src, inp_dir, usr_configs_read
-try: # get path names if set
+from funcs import shortpath, cache_site_files, uncache_site_files
+from dmg_au_utils import *
+try:  # get path names if set
     from dmgui_au import pkg_dir, data_dir, data_src, inp_dir
     usr_configs_read = True
-except:
+except ImportError:
     # if setup.py is running, don't issue warning
     if sys.argv[0] != 'setup.py':
         print("-W- Local path names have not been set. Please run setup.py")
     usr_configs_read = False
 
-global CURRENT_VERSION
 CURRENT_VERSION = pmag.get_version()
 
-class bcolors:
-    HEADER = '\033[95m'
-    OKBLUE = '\033[94m'
-    OKGREEN = '\033[92m'
-    WARNING = '\033[93m'
-    FAIL = '\033[91m'
-    ENDC = '\033[0m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
-
-class Logger(object):
-    """
-    log stdout to debug_inp.log
-    """
-    def __init__(self,clr_output=True):
-        global usr_configs_read, data_dir
-        self.clr_output = clr_output
-        self.terminal = sys.stdout
-        log_file = "demag_gui_au.log"
-        if usr_configs_read:
-            log_file = os.path.join(data_dir,log_file)
-        self.log = open(log_file, "a+")
-        self.log.write(
-            '\n{:-^80}\n\n'.format('  Starting session at {}  '.format(asctime())))
-
-    def write(self, message):
-        if self.clr_output:
-            if '-I-' in str(message):
-                if 'Timer' in str(message):
-                    self.terminal.write(bcolors.OKBLUE)
-                else:
-                    self.terminal.write(bcolors.OKGREEN)
-            elif '-W-' in str(message):
-                self.terminal.write(bcolors.WARNING)
-            elif '-E-' in str(message):
-                self.terminal.write(bcolors.FAIL)
-        self.terminal.write(message)
-        if self.clr_output:
-            self.terminal.write(bcolors.ENDC)
-        self.log.write(message)
-
-    def flush(self):
-        #this flush method is needed for python 3 compatibility.
-        #this handles the flush command by doing nothing.
-        #you might want to specify some extra behavior here.
-        pass
-
-    def cut_info_stmts(self):
-        if not self.log.close():
-            reopen_log = True
-            self.log.close()
-        else:
-            reopen_log = False
-        lines = open('demag_gui_au.log').readlines()
-        stmt_flags = ['-I-','Closing']
-        to_save = [i for i, l in enumerate(lines) if not any(
-            [fg in l for fg in stmt_flags])]
-        newlogl=[lines[s] for s in to_save]
-        newlog=open("demag_gui_au.log", "w+")
-        if reopen_log:
-            self.log = open("demag_gui_au.log", "a+")
-
-def start_logger():
-    sys.stdout = Logger()
-    # sys.stdout.cut_info_stmts()
-
-def stop_logger():
-    sys.stdout.log.write('{:-^80}\n'.format('  Closing session  '))
-    sys.stdout.log.close()
-    sys.stdout = sys.__stdout__
 
 class Demag_GUIAU(dgl.Demag_GUI):
 
     def __init__(self, WD=None, write_to_log_file=True, inp_file=None,
                  delay_time=3, data_model=3.0, test_mode_on=True):
-        global usr_configs_read, inp_dir, pkg_dir
-        if write_to_log_file: start_logger()
-        self.title = "Demag GUI Autoupdate | %s"%(CURRENT_VERSION.strip("pmagpy-"))
+        global usr_configs_read, inp_dir, pkg_dir, data_dir, CURRENT_VERSION
+        # catch user interruption signal (ctrl+c) so app can still close properly
+        # not working right now
+        # signal.signal(signal.SIGINT, self.sigint_catcher)
+        # if write_to_log_file: start_logger()
+        self.title = "Demag GUI Autoupdate | %s" % (CURRENT_VERSION.strip("pmagpy-"))
         if WD is None:
             self.WD = os.getcwd()
         else:
             self.WD = os.path.realpath(os.path.expanduser(WD))
+        uncached, num_cached_files = uncache_site_files(self.WD)
+        # set attribute to be used by read_inp() to warn the user once and only
+        # once if there are commented lines in inp file
+        self.warn_comments_in_inpfile = False
+        if uncached:
+            print("-I- Unpacking {} site-level MagIC files previously"
+                  " cached".format(num_cached_files))
         WD_short = shortpath(self.WD)
         if not os.path.isdir(self.WD):
-            print(f"-E- Working directory {WD_short} does not exist. ")
+            print(f"-E- Working directory {WD_short} does not exist.")
         print(f"-I- Working directory set to {WD_short}")
         # self.delete_magic_files(self.WD)
         self.data_model = data_model
@@ -127,11 +67,14 @@ class Demag_GUIAU(dgl.Demag_GUI):
         if inp_file is None:
             temp_inp_pick = wx.Frame()
             if usr_configs_read:
-                inp_file_name = self.pick_inp(temp_inp_pick,inp_dir)
-                # inp_file_name = self.pick_inp(self,inp_dir)
+                inp_file_name = self.pick_inp(temp_inp_pick, inp_dir)
+                if inp_file_name is None:
+                    ls_inp_dir = list(os.path.join(inp_dir, s) for s in os.listdir(inp_dir))
+                    inp_file_name = max(ls_inp_dir, key=os.path.getmtime)
+                    print("-W- No .inp file selected. Reading most recently"
+                          " opened file: %s" % (os.path.basename(inp_file_name)))
             else:
-                inp_file_name = self.pick_inp(temp_inp_pick,self.WD)
-                # inp_file_name = self.pick_inp(self,self.WD)
+                inp_file_name = self.pick_inp(temp_inp_pick, self.WD)
             temp_inp_pick.Destroy()
         elif not os.path.isfile(os.path.realpath(inp_file)):
             inp_file = os.path.realpath(inp_file)
@@ -173,11 +116,12 @@ class Demag_GUIAU(dgl.Demag_GUI):
         # add read .inp option to menubar
         self.menubar = super().GetMenuBar()
         menu_file = self.menubar.GetMenu(0)
-        m_read_inp = menu_file.Insert(1, -1, "Read .inp file\tCtrl-I","")
+        m_read_inp = menu_file.Insert(1, -1, "Read .inp file\tCtrl-I", "")
         self.Bind(wx.EVT_MENU, self.on_menu_pick_read_inp, m_read_inp)
         self.menubar.Refresh()
         # make statusbar
-        self.statusbar = self.CreateStatusBar(1)
+        self.statusbar = self.CreateStatusBar()
+
         # find .inp file
         # if inp_file is None:
         #     if usr_configs_read:
@@ -209,6 +153,8 @@ class Demag_GUIAU(dgl.Demag_GUI):
         self.timer.Start(self.delay_time*1000)
         self.Bind(EVT_TIMER, self.on_timer)
         self.Bind(wx.EVT_CLOSE, self.OnClose)
+        # disable test mode to enable dialogs once GUI has started up
+        super().set_test_mode(False)
 
     ####################################################
     #  initialization methods/changes to the main GUI  #
@@ -218,17 +164,25 @@ class Demag_GUIAU(dgl.Demag_GUI):
         """
         add buttons to toggle timer and to stream from main data directory (Dropbox)
         """
-        au_status_sizer = wx.StaticBoxSizer(wx.StaticBox(self.panel, wx.ID_ANY, "Autoupdate Status"), wx.VERTICAL)
-        self.au_status_button = wx.ToggleButton(self.panel, id=wx.ID_ANY, size=(100*self.GUI_RESOLUTION, 25))
+        self.top_bar_sizer = self.panel.GetSizer()
+        self.top_bar_h_space = 10
+        au_status_sizer = wx.StaticBoxSizer(wx.StaticBox(self.panel,
+                                                         wx.ID_ANY,
+                                                         "Autoupdate Status"),
+                                            wx.VERTICAL)
+        self.au_status_button = wx.ToggleButton(self.panel, id=wx.ID_ANY,
+                                                size=(100*self.GUI_RESOLUTION, 25))
         self.au_status_button.SetValue(True)
-        self.au_status_button.SetLabelMarkup("<span foreground='green'><b>{}</b></span>".format("Running"))
-        self.go_live = wx.ToggleButton(self.panel, id=wx.ID_ANY, label='Go Live', size=(100*self.GUI_RESOLUTION, 25))
+        self.au_status_button.SetLabelMarkup("<span foreground='green'><b>" +
+                                             "{}</b></span>".format("Running"))
+        self.go_live = wx.ToggleButton(self.panel, id=wx.ID_ANY, label='Go Live',
+                                       size=(100*self.GUI_RESOLUTION, 25))
         au_status_btn_sizer = wx.GridSizer(2, 1, 10, 0)
         au_status_btn_sizer.AddMany([(self.au_status_button, 1, wx.ALIGN_RIGHT | wx.EXPAND),
                                     (self.go_live, 1, wx.ALIGN_RIGHT | wx.EXPAND)])
         au_status_sizer.Add(au_status_btn_sizer, 1, wx.TOP | wx.EXPAND, 5)
         self.top_bar_sizer.Add(au_status_sizer, 1, wx.ALIGN_LEFT |
-                          wx.LEFT, self.top_bar_h_space)
+                               wx.LEFT, self.top_bar_h_space)
         self.Bind(wx.EVT_TOGGLEBUTTON, self.on_au_status_button, self.au_status_button)
         self.Bind(wx.EVT_TOGGLEBUTTON, self.on_go_live, self.go_live)
         self.top_bar_sizer.Layout()
@@ -241,7 +195,7 @@ class Demag_GUIAU(dgl.Demag_GUI):
             self.icon = wx.Icon()
             self.icon.LoadFile(
                     os.path.join(pkg_dir, "images",
-                        "dmg_au_icon.icns"),
+                                 "dmg_au_icon.icns"),
                     type=wx.BITMAP_TYPE_ICON, desiredWidth=1024,
                     desiredHeight=1024)
             self.taskicon = wx.adv.TaskBarIcon(wx.adv.TBI_DOCK)
@@ -251,11 +205,10 @@ class Demag_GUIAU(dgl.Demag_GUI):
             self.icon = wx.Icon()
             self.icon.LoadFile(
                     os.path.join(pkg_dir, "images",
-                        "dmg_au_icon.ico"),
+                                 "dmg_au_icon.ico"),
                     type=wx.BITMAP_TYPE_ICO, desiredWidth=1024,
                     desiredHeight=1024)
             self.SetIcon(self.icon)
-
 
     ####################
     #  static methods  #
@@ -265,24 +218,25 @@ class Demag_GUIAU(dgl.Demag_GUI):
     # def shortpath(abspath):
     #     return abspath.replace(os.path.expanduser('~') + os.sep, '~/', 1)
 
-    @staticmethod
-    def delete_magic_files(self, WD, data_model=3.0):
-        compiled_file_names = [
-            'measurements.txt',
-            'specimens.txt',
-            'samples.txt',
-            'sites.txt',
-            'locations.txt',
-            'contribution.txt',
-            'criteria.txt',
-            'ages.txt',
-            'images.txt',
-            '.magic']
-        wd_files = list(filter(os.path.isfile, map(lambda x: os.path.join(wd,x),os.listdir(wd))))
-        mfiles = list(filter(lambda x: any([str(x).endswith(fname) for fname in compiled_file_names]),wd_files))
-        for mfile in compiled_file_names:
-            os.remove(os.path.relpath(mfile))
-            print("-I- Removing %s"%(os.path.relpath(mfile)))
+    # @staticmethod
+    # def delete_magic_files(self, WD, data_model=3.0):
+    #     compiled_file_names = [
+    #         'measurements.txt',
+    #         'specimens.txt',
+    #         'samples.txt',
+    #         'sites.txt',
+    #         'locations.txt',
+    #         'contribution.txt',
+    #         'criteria.txt',
+    #         'ages.txt',
+    #         'images.txt',
+    #         '.magic']
+    #     wd_files = list(filter(os.path.isfile, map(lambda x: os.path.join(WD, x),
+    #                                                os.listdir(WD))))
+    #     mfiles = list(filter(lambda x: any([str(x).endswith(fname) for fname in compiled_file_names]),wd_files))
+    #     for mfile in compiled_file_names:
+    #         os.remove(os.path.relpath(mfile))
+    #         print("-I- Removing %s" % (os.path.relpath(mfile)))
 
     # @staticmethod
     # def clr_output(raw_str):
@@ -345,10 +299,25 @@ class Demag_GUIAU(dgl.Demag_GUI):
             print("-I- Timer started")
         self.set_statusbar()
 
+    def set_statusbar(self, info=None):
+        status_font = wx.Font(wx.FontInfo())  # .Bold())
+        # font settings copied from demag_gui
+        FONT_WEIGHT = 1
+        if sys.platform.startswith('win'):
+            FONT_WEIGHT = -1
+        font1 = wx.Font(9+FONT_WEIGHT, wx.SWISS, wx.NORMAL,
+                        wx.NORMAL, False, self.font_type)
+        font2 = wx.Font(11+FONT_WEIGHT, wx.SWISS, wx.NORMAL,
+                        wx.NORMAL, False, self.font_type)
+        font = wx.SystemSettings.GetFont(wx.SYS_SYSTEM_FONT)
+        font.SetPointSize(10+FONT_WEIGHT)
 
-    def set_statusbar(self):
         timer_status = self.get_status()
-        if timer_status:
+        self.statusbar.SetFont(font2)
+        if info is not None:
+            self.statusbar.SetStatusText(info)
+            self.statusbar.SetBackgroundColour(wx.Colour(96, 194, 242))
+        elif timer_status:
             self.statusbar.SetStatusText('Reading data from %s' % (self.get_sam_path()))
             self.statusbar.SetBackgroundColour(wx.Colour(193, 240, 193))
         else:
@@ -356,17 +325,20 @@ class Demag_GUIAU(dgl.Demag_GUI):
             self.statusbar.SetBackgroundColour(wx.Colour(255, 255, 153))
 
     def on_menu_pick_read_inp(self, event):
-        self.toggle_timer()
+        if self.get_status:
+            self.toggle_timer()
+        self.set_statusbar(info="Selecting new inp file...")
         global usr_configs_read, inp_dir
         if usr_configs_read:
-            inp_file_name = self.pick_inp(self,inp_dir)
+            inp_file_name = self.pick_inp(self, inp_dir)
         else:
-            inp_file_name = self.pick_inp(self,self.WD)
-        if inp_file_name == None:
+            inp_file_name = self.pick_inp(self, self.WD)
+        if inp_file_name is None:
             self.toggle_timer()
             return
         self.inp_file = inp_file_name
-
+        # reinitialize one-shot warning with new inp file
+        self.warn_comments_in_inpfile = False
         magic_files = {}
         self.read_inp(self.WD, self.inp_file, magic_files, self.data_model)
         self.combine_magic_files(self.WD, magic_files, self.data_model)
@@ -403,11 +375,13 @@ class Demag_GUIAU(dgl.Demag_GUI):
             self.go_live.SetLabel("Go Live")
 
     def on_new_inp(self):
-        print("-I- Reading from .inp file %s"%(shortpath(self.inp_file)))
+        print("-I- Reading from .inp file %s" % (shortpath(self.inp_file)))
         inp = open(self.inp_file, "r")
         inp_lines = inp.read().splitlines()[2:]
         inp.close()
-        for inp_line in inp_lines:
+        # filter out commented lines for printing
+        operable_lines = [x for x in inp_lines if not x.startswith("# ")]
+        for inp_line in operable_lines:
             print("-I- Tracking updates at %s" %
                   (shortpath(inp_line.split('\t')[0])))
 
@@ -487,7 +461,7 @@ class Demag_GUIAU(dgl.Demag_GUI):
         # Draw figures and add text
         if self.Data and any(
                 self.Data[s][k] if not isinstance(
-                    self.Data[s][k],type(array([])))
+                    self.Data[s][k], type(array([])))
                 else self.Data[s][k].any() for s in self.Data for k in self.Data[s]):
             # get previous interpretations from pmag tables
             if self.data_model == 3.0 and 'specimens' in self.con.tables:
@@ -504,7 +478,7 @@ class Demag_GUIAU(dgl.Demag_GUI):
             pass
 
     ####################################
-    #  main methods for handling data  #
+    #  core methods for handling data  #
     ####################################
 
     def update_loop(self, inp_file=None, force_update=False, delay_time=1, data_model=3.0):
@@ -522,14 +496,12 @@ class Demag_GUIAU(dgl.Demag_GUI):
             update_list = []
 
             for inp_file_name in inp_file_names:
-                update_list.append(self.read_inp(
-                    self.WD, inp_file_name, magic_files, data_model))
+                update_list.append(self.read_inp(self.WD, inp_file_name, magic_files, data_model))
             update_needed = any(update_list)
         else:
             inp_file_name = self.inp_file
             magic_files = {}
-            update_needed = self.read_inp(
-                self.WD, inp_file_name, magic_files, data_model)
+            update_needed = self.read_inp(self.WD, inp_file_name, magic_files, data_model)
         if update_needed or force_update:
             print("-I- Resetting...")
             self.combine_magic_files(self.WD, magic_files,
@@ -562,7 +534,6 @@ class Demag_GUIAU(dgl.Demag_GUI):
             raise RuntimeError(
                 "Recursion depth exceded, please use different working "
                 "directory. There are too many sub-directeries to walk")
-
 
     def read_inp(self, WD, inp_file_name, magic_files, data_model=3.0):
         inp_file = open(inp_file_name, "r")
@@ -598,6 +569,22 @@ class Demag_GUIAU(dgl.Demag_GUI):
         format = lines[0].strip()
         header = lines[1].split('\t')
         update_files = lines[2:]
+        # ignore lines that have been commented out (see the final lines of
+        # this method) due to CIT/MagIC conversion failure, which is
+        # usually a consequence of insufficient data
+        #
+        # (lines commented out will be added back to the inp file at end of this
+        # method)
+        update_files_commented = [x for x in update_files if x.startswith("# ")]
+        if len(update_files_commented) > 0 and not self.warn_comments_in_inpfile:
+            print(textwrap.dedent("""\
+            -W- There are currently {} commented lines in the file {}. These lines
+                will be ignored until the hash marks/comments are removed by the user.\
+                                  """.format(len(update_files_commented),
+                                             os.path.basename(self.inp_file))))
+            self.warn_comments_in_inpfile = True
+
+        update_files = [x for x in update_files if not x.startswith("# ")]
         update_data = False
 
         for i, update_file in enumerate(update_files):
@@ -629,7 +616,6 @@ class Demag_GUIAU(dgl.Demag_GUI):
 
             if os.path.join(d, f) in magic_files:
                 new_inp_file += update_file+"\r\n"
-
                 continue
 
             if float(update_lines[-1]) >= os.path.getmtime(update_lines[0]):
@@ -644,7 +630,6 @@ class Demag_GUIAU(dgl.Demag_GUI):
                     if float(update_lines[-1]) < \
                             os.path.getmtime(spec_file_path):
                         no_changes = False
-
                         break
 
                 if no_changes and os.path.isfile(os.path.join(WD, f)) \
@@ -659,7 +644,6 @@ class Demag_GUIAU(dgl.Demag_GUI):
                     magic_files['sites'].append(os.path.join(WD, ersitef))
                     magic_files['locations'].append(os.path.join(WD, erlocf))
                     new_inp_file += update_file+"\r\n"
-
                     continue
 
             if len(header) != len(update_lines):
@@ -667,7 +651,6 @@ class Demag_GUIAU(dgl.Demag_GUI):
                       "%s are different and will be skipped" % (
                           update_lines[0]))
                 new_inp_file += update_file+"\r\n"
-
                 continue
             update_dict = {}
 
@@ -738,7 +721,29 @@ class Demag_GUIAU(dgl.Demag_GUI):
                     magic_files['sites'].append(sitep)
                     magic_files['locations'].append(locp)
                 else:
-                    new_inp_file += update_file
+                    # TODO: This depends on convert.cit() returning a False
+                    # value, which was modified in the conversion module (it
+                    # currently always returns True, even if the conversion
+                    # ultimately fails) <09-08-18, Luke Fairchild> #
+                    """
+                    small note: For the case at present, I've organized and
+                    combined inp files by project, which can nicely be done now
+                    using combine_inp_files.py. However, some sites do not yet
+                    have data yet, which was causing problems in this part of
+                    the code. Being able to comment out lines seems to be a more
+                    elegant solution than deleting these lines manually or
+                    moving the copied inp files out of the local directory.
+                    <09-08-18, Luke Fairchild>
+                    """
+                    # comment out the lines/sites for which CIT to MagIC conversion
+                    # failed
+                    new_inp_file += "# "+update_file+"\r\n"
+                    print("""\
+                          -W- CIT to MagIC conversion failed for site {}. The
+                          line containing information for this site has been
+                          marked/commented out within the file {} and will be
+                          ignored until modified by the
+                          user.""".format(CIT_name, shortpath(self.inp_file)))
 
                     if os.path.isfile(measp) and \
                        os.path.isfile(specp) and \
@@ -754,6 +759,9 @@ class Demag_GUIAU(dgl.Demag_GUI):
         inp_file.close()
         out_file = open(inp_file_name, "w")
         out_file.write(new_inp_file)
+        # write back any ignored lines to end of file
+        for l in update_files_commented:
+            out_file.write(l+"\r\n")
         # out_file.close()
 
         return update_data
@@ -768,8 +776,7 @@ class Demag_GUIAU(dgl.Demag_GUI):
                 for dot_magic in magic_files['measurements']:
                     if not os.path.isfile(dot_magic):
                         magic_files['measurements'].remove(dot_magic)
-                        print('No data for {}'.format(dot_magic))
-                print(magic_files['measurements'])
+                        print('-W- No data for {}'.format(dot_magic))
                 combine_magic(magic_files['measurements'], os.path.join(
                     WD, "measurements.txt"))
 
@@ -823,12 +830,18 @@ class Demag_GUIAU(dgl.Demag_GUI):
         if dlg.ShowModal() == wx.ID_OK:
             inp_file_name = dlg.GetPath()
         else:
+            # notify user that most recent file will be used
+            disableAll = wx.WindowDisabler()
+            wait = wx.BusyInfo('No inp file selected. Reading from'
+                               ' most recently opened files...')
+            wx.SafeYield()
+            sleep(1.5)
+            del wait
             inp_file_name = None
         dlg.Destroy()
-
         return inp_file_name
 
-    # TODO: The following method should be implemented in demag_gui; the call
+    # TODO: The following method should really be implemented in demag_gui; the call
     # to self.level_names.SetValue in self.update_selection is ignored because
     # the combobox self.level_names is readonly <08-12-18, Luke Fairchild> #
 
@@ -919,6 +932,10 @@ class Demag_GUIAU(dgl.Demag_GUI):
         # redraw interpretations
         self.update_GUI_with_new_interpretation()
 
+    # def sigint_catcher(self, sig, frame):
+    #     # wx.PostEvent(self.OnClose, wx.EVT_CLOSE)
+    #     self.OnClose(wx.EVT_CLOSE)
+
     def OnClose(self, event):
         """
         Close down all processes
@@ -927,31 +944,31 @@ class Demag_GUIAU(dgl.Demag_GUI):
         if self.timer.IsRunning():
             self.timer.Stop()
             print("-I- Timer stopped")
-        # stop the logger
-        stop_logger()
+        # cache site-level magic files to de-clutter data directory
+        cache_site_files(self.WD)
+        print("-I- Site-level magic files stored in 'magic_cache'")
         self.Destroy()
 
 
 def start(WD=None, inp_file=None, delay_time=1, vocal=False, data_model=3):
     global cit_magic
     if int(float(data_model)) == 3:
-        cit_magic = cit_magic3
+        cit_magic = cit_magic
     else:
         cit_magic = cit_magic2
     app = App()
     # start the GUI
     # overriding vocal argument `not vocal` for testing purposes
     dg = Demag_GUIAU(WD, write_to_log_file=True, inp_file=inp_file,
-            delay_time=delay_time, data_model=float(data_model))
+                     delay_time=delay_time, data_model=float(data_model))
     app.frame = dg
     app.frame.Center()
     app.frame.Show()
     app.MainLoop()
 
+
 def main():
     kwargs = {}
-    if any(x in sys.argv for x in ["-h","--help"]):
-        help(dgl); sys.exit()
     global data_dir, usr_configs_read
     if usr_configs_read:
         print('-I- Successfully read in user configs and local paths')
@@ -984,7 +1001,32 @@ def main():
     elif "--data_model" in sys.argv:
         dm_index = sys.argv.index("--data_model")
         kwargs['data_model'] = sys.argv[dm_index+1]
+
     start(**kwargs)
+    # start logger
+    # start_logger(usr_configs_read, inp_dir, pkg_dir, data_dir)
+    # log_file = "demag_gui_au.log"
+    # if usr_configs_read:
+    #     log_file = os.path.join(data_dir, log_file)
+    # else:
+    #     log_file = os.path.join('.', log_file)
+    # with loggercontext(log_file, quiet=False):
+    #     # start application
+    # start(**kwargs)
+    # stop logger
+    # stop_logger()
+
 
 if __name__ == "__main__":
-    main()
+    if any(x in sys.argv for x in ["-h", "--help"]):
+        help(dgl)
+        sys.exit()
+    log_file = "demag_gui_au.log"
+    if usr_configs_read:
+        log_file = os.path.join(data_dir, log_file)
+    else:
+        log_file = os.path.join('.', log_file)
+    with loggercontext(log_file, quiet=False):
+        # start application
+        main()
+    # main()

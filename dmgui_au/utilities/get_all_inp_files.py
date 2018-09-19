@@ -38,21 +38,19 @@ except:
         print("-W- Local path names have not been set. Please run setup.py")
     usr_configs_read = False
 
-def get_all_inp_files(data_src='.', data_dir='.', inp_dir='.', nocopy = False):
+def get_all_inp_files(data_src='.', inp_dir='.', nocopy = False):
     """
-    Retrieve all .inp files within the directory data_src
+    Retrieve all .inp files within the directory data_src. By default, copies
+    these files to directory inp_dir.
 
     Parameters
     ----------
     data_src : path
         directory to search; default is current directory
-    data_dir : path
-        primary write directory
     inp_dir : path
-        designated directory for copying .inp files
+        designated directory to which copied .inp files will be written
     nocopy : bool
-        if True, do not copy any data files; only write
-        to all_inp_files.txt
+        if True, do not copy any data files; only write all_inp_files.txt
 
     Returns
     -------
@@ -71,14 +69,15 @@ def get_all_inp_files(data_src='.', data_dir='.', inp_dir='.', nocopy = False):
 
         for root, dirs, files in os.walk(data_src):
             for d in dirs:
-                get_all_inp_files(os.path.join(root, d), data_dir, inp_dir, nocopy)
+                get_all_inp_files(os.path.join(root, d), inp_dir, nocopy)
 
             for f in files:
                 # test if the file name matches another in the list
                 already_recorded = f in map(lambda x: os.path.split(x)[1], all_inp_files)
                 # add if it does not (+ other filters)
-                if f.endswith(".inp") and not f.startswith(".") and not already_recorded:
-                    all_inp_files.append(os.path.join(root, f))
+                if f.endswith(".inp") and not already_recorded:
+                    if not any(list(f.startswith(prefix) for prefix in [".", "_", "-"])):
+                        all_inp_files.append(os.path.join(root, f))
                 # if matching names, are they same file? If not, add to list and
                 # record the name conflict
                 elif already_recorded and not any(map(lambda x: os.path.samefile(os.path.join(root, f), x), all_inp_files)):
@@ -92,7 +91,7 @@ def get_all_inp_files(data_src='.', data_dir='.', inp_dir='.', nocopy = False):
                     else:
                         name_conflicts[f] = [os.path.join(root,f)]
                     # name_conflicts[f]=[x for x in all_inp_files if f in os.path.split(x)[1]]
-        out_file = open(os.path.join(data_dir, "all_inp_files.txt"), "w")
+        out_file = open(os.path.join(inp_dir, "all_inp_files.txt"), "w")
         # print(name_conflicts)
         for inp in all_inp_files:
             out_file.write(inp+'\n')
@@ -154,15 +153,12 @@ def main():
             (--help) help message""")
     parser.add_argument('-ds', '--data_src', nargs='?', help="""Top-level
     directory in which to search for *.inp files""")
-    parser.add_argument('-do', '--data_dir', nargs='?', help="""Top-level output
-        directory (target for all_inp_files.txt)""", default="./data")
     parser.add_argument('-inp', '--inp_dir', nargs='?', help="""Target for copied
         *.inp files".""")
     parser.add_argument('--nocopy', action='store_true', help="""Do not copy
     files""", default=False)
     if usr_configs_read:
-        parser.set_defaults(data_src=data_src,
-                            data_dir=data_dir, inp_dir=inp_dir)
+        parser.set_defaults(data_src=data_src, inp_dir=inp_dir)
     # parser.add_argument('--help', dest='help_long', action='store_const',
     #                     const=True, help=argparse.SUPPRESS)
     args = vars(parser.parse_args())

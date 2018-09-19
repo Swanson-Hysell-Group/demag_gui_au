@@ -2,27 +2,29 @@
 # -*- coding: utf-8 -*-
 
 import os
-import sys
+import re
+import textwrap
 import argparse
-# from get_all_inp_files import get_all_inp_files
-# global top_dir, pkg_dir, data_dir, data_src, inp_dir, usr_configs_read
-# try:  # get path names if set
-#     from dmgui_au import pkg_dir, data_dir, data_src, inp_dir
-#     usr_configs_read = True
-# except:
-#     # if setup.py is running, don't issue warning
-#     if sys.argv[0] != 'setup.py':
-#         print("-W- Local path names have not been set. Please run setup.py")
-#     usr_configs_read = False
 
 
 def combine_inp(inp_files, file_name='all_inp'):
     """
-    Function that combines inp files into a single inp file which allows faster
-    running of autoupdate wrapper of demag_gui.
+    Function that combines inp files into a single inp file, allowing data to be
+    conveniently grouped into custom data sets and viewed altogether.
 
-    @param: inp_files - list of inp files to combine
-    @param: file_name - name of new combined .inp file
+    Parameters
+    ----------
+    inp_files : list
+        List of inp files to combine
+    file_name : str, optional
+        Name of new, combined .inp file to be written. If no name is specified,
+        the file will be written with the default name `all_inp.inp`
+
+    Returns
+    -------
+    bool
+        True if successful, False otherwise.
+
     """
     out_path = '.'
 
@@ -37,89 +39,70 @@ def combine_inp(inp_files, file_name='all_inp'):
         for line in lines[2:]:
             ofs += line+'\r\n'
 
-    print('Writing file -', os.path.relpath(os.path.join(out_path, file_name +
-                                                         '.inp')))
+    print('Writing file -',
+          os.path.relpath(os.path.join(out_path, file_name + '.inp')))
     of = open(os.path.join(out_path, file_name + '.inp'), 'w+')
     of.write(ofs)
     of.close()
+    return True
 
 
-# def combine_inp(sd=None, out_path=None):
-#     """
-#     Function that combines inp files into a single inp file which allows faster
-#     running of autoupdate wrapper of demag_gui.
+def main():
+    prog_desc = textwrap.dedent("""\
+    Combine .inp files so that particular data sets can be read into and viewed
+    in DemagGUI AU simultaneously. Accepts glob patterns for selecting files to
+    be combined, or file names can be given as individual arguments.""")
 
-#     @param: sd - top level directory whose subdirectories and files will be
-#     searched for  all inp files to combine.
-#     """
+    prog_epilog = textwrap.dedent("""\
 
-#     global top_dir, pkg_dir, data_dir, data_src, inp_dir, usr_configs_read
-#     if sd is None and usr_configs_read:
-#         sd = data_src
-#     elif sd is None:
-#         sd = input("No search directory found. Enter top-level directory to "
-#                    "search for inp files: ")
-#         sd = os.path.abspath(os.path.expanduser(sd))
-#     else:
-#         sd = os.path.abspath(sd)
+    Examples
+    --------
+    Consider a paleomagnetic study comprising 50 sites total. Each site name
+    begins with 'NE' such that the set of inp files from this study are
+    'NE1.inp', 'NE2.inp', [...] , 'NE50.inp'. As you develop data for each site,
+    you decide you want to be able to view all data together (i.e. at the
+    study-level) within DemagGUI. This can be done by combining all inp files
+    from this study (which can be selected via a simple glob pattern, e.g.
+    'NE*.inp') into a single composite inp file named, say, 'NE_study_all':
 
-#     if out_path is None and usr_configs_read:
-#         out_path = inp_dir
-#     elif out_path is None:
-#         out_path = '.'
-#     else:
-#         out_path = os.path.abspath(out_path)
+        $ combine_inp_files.py --fname NE_study_all NE*.inp
 
-#     all_inp_files = get_all_inp_files(data_src=sd, data_dir=out_path,
-#                                       inp_dir=out_path, nocopy=True)
-#     if all_inp_files == []:
-#         print("No inp files found, aborting process")
-#         return
+    Instead of providing a glob pattern, you can also simply list out the files as
+    positional arguments on the command line. This might be preferable when
+    combining a small number of sites:
 
-#     ofs = ""
-#     ofs += "CIT\r\n"
-#     ofs += "sam_path\tfield_magic_codes\tlocation\tnaming_convention\tnum_terminal_char\tdont_average_replicate_measurements\tpeak_AF\ttime_stamp\r\n"
-#     for inpfn in all_inp_files:
-#         if 'all.inp' in inpfn:
-#             continue
-#         inpf = open(inpfn, 'r')
-#         lines = inpf.read().splitlines()
-#         for line in lines[2:]:
-#             ofs += line+'\r\n'
+        $ combine_inp_files.py --fname NE1_thru_4 NE1.inp NE2.inp NE3.inp NE4.inp
 
-#     print('Writing file - ' + out_path + 'all' + '.inp')
-#     of = open(out_path + 'all' + '.inp', 'w+')
-#     of.write(ofs)
-#     of.close()
+    Or when file names are dissimilar and you don't care to figure out what glob
+    pattern would work:
 
-#     # magic_files = []
-#     # dg.read_inp(out_path + 'all' + '.inp', magic_files)
-#     # print('Writing file - ' + out_path + 'magic_measurements.txt')
-#     # dg.combine_magic_files(magic_files)
+        $ combine_inp_files.py --fname combined_inp CF16R.inp UF2.inp BFR-.inp py4H.inp
 
-
-if __name__ == "__main__":
-    # if "-h" in sys.argv:
-    #     help(combine_inp)
-    #     sys.exit()
-    parser = argparse.ArgumentParser(description="Combine .inp files.")
-    parser.add_argument('inp_files', nargs='*')  # , type=)#, default=sys.stdin)
-    parser.add_argument('--fname', dest='file_name', type=str)
+    """)
+    parser = argparse.ArgumentParser(prog="combine_inp_files.py",
+                                     description=prog_desc,
+                                     epilog=prog_epilog,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('inp_files', nargs='*',
+                        help="""inp files to combine. If no file names are
+                        provided, defaults to all *.inp files within the current
+                        directory.""")
+    parser.add_argument('--fname', dest='file_name', type=str, default="all_inp")
 
     args = vars(parser.parse_args())
     inp_file_list = args.pop('inp_files')
-    combine_inp(inp_file_list, **args)
+    if len(inp_file_list) == 0:
+        filt = re.compile('.*\.inp')
+        # search for inp files in CWD; the filter below excludes directories
+        for s in list(filter(os.path.isfile, os.listdir())):
+            if filt.match(s):
+                inp_file_list.append(s)
+    if len(inp_file_list) == 0:
+        print("Nothing to combine---no file names were provided, and no inp "
+              "files were found in current directory.")
+    else:
+        combine_inp(inp_file_list, **args)
 
-    # if usr_configs_read and len(sys.argv) == 1:
-    #     combine_inp()
-    #     sys.exit()
-    # try:
-    #     sd = sys.argv[1]
-    # except IndexError:
-    #     print("no directory to search for inp files to combine, aborting")
-    #     sys.exit()
-    # try:
-    #     out_path = sys.argv[2]
-    #     combine_inp(sd, out_path=out_path)
-    # except:
-    #    combine_inp(sd)
+
+if __name__ == "__main__":
+    main()

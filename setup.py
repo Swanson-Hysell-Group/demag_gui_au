@@ -158,7 +158,6 @@ class Logger(object):
         #     self.dbcounter += 1
 
 
-
 class loggercontext(ContextDecorator):
     def __init__(self, show=None, quiet=False):
         self.show = show
@@ -181,15 +180,15 @@ def stop_logger(*exc):
     if not any(exc):
         sys.stdout.log.write(
             '{:-^80}\n'.format('  Setup finished successfully at {}  '.format(asctime())))
-        finished=True
+        finished = True
     elif exc[0] is SystemExit:
-        finished=False
+        finished = False
         pass
     else:
         sys.stdout.write('-E- Setup failed! Aborting...\n')
         sys.stdout.log.write('-E- The following error occurred:\n' +
                              ''.join(traceback.format_exception(*exc)))
-        finished=False
+        finished = False
     sys.stdout.log.close()
     sys.stdout = sys.__stdout__
     if finished:
@@ -212,13 +211,11 @@ def setup_dirs_and_files(dropbox=False):
     pkg_dir = os.path.join(top_dir, 'dmgui_au')
     configfile = os.path.join(pkg_dir, "dmgui_au.conf")
     if os.path.isfile(configfile):
-        print("-W- Configuration file 'dmgui_au.conf' already exists. Overwrite? (y/[n]) ")
+        print("-W- Configuration file 'dmgui_au.conf' already exists. Overwrite? ([y]/n) ")
         rewrite = sys.stdin.readline()
         # TODO: Need to handle the case where configs have already been set, but
         # user still wants to continue with the rest of the setup <08-17-18, Luke Fairchild> #
-        if rewrite.strip().lower() in "yes":
-            pass
-        else:
+        if 'n' in rewrite.strip().lower():
             print("-W- Quitting...")
             sys.exit()
     # find main data directory
@@ -255,7 +252,7 @@ def setup_dirs_and_files(dropbox=False):
         print('{0:<35} {1:<45}'.format(*vals))
     print('')
     print('-I- Finding .inp files...')
-    fileno = get_all_inp_files(data_src, data_dir, inp_dir, nocopy=False)
+    fileno = get_all_inp_files(data_src, inp_dir, nocopy=False)
     print("-I- {} files found! All files copied to 'data/inp_files'".format(len(fileno)))
 
     print("-I- Validating path names and structure of .inp files...")
@@ -279,8 +276,9 @@ def setup_dirs_and_files(dropbox=False):
     # else:
     # print("Okay, ")
     for i in os.listdir(inp_dir):
-        debug_inp(os.path.join(inp_dir, i), noinput=True, usr_configs_read=True,
-                  data_src=data_src, data_dir=data_dir, inp_dir=inp_dir)
+        if i != 'all_inp_files.txt':
+            debug_inp(os.path.join(inp_dir, i), noinput=True, usr_configs_read=True,
+                      data_src=data_src, data_dir=data_dir, inp_dir=inp_dir)
 
 
 def main():
@@ -297,10 +295,8 @@ def main():
         if '--all' in sys.argv:
             data_tree = os.path.join(top_dir, 'data')
             del_data_tree = input("WARNING: This will delete everything under\n\n"
-                                  "{}\n\nContinue? (y/[n]) ".format(data_tree))
-            if del_data_tree.lower() in 'yes':
-                pass
-            else:
+                                  "{}\n\nContinue? ([y]/n) ".format(data_tree))
+            if 'n' in del_data_tree.lower():
                 return
             try:
                 x = "'data/'"
