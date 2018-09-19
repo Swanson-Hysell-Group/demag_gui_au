@@ -331,7 +331,6 @@ def debug_inp(inp_file, dropbox = False, noinput=False, usr_configs_read=None,
                 samp_names = []
                 for samp in sl:
                     samp_names.append(samp.partition(site_name)[-1])
-                # print(samp_names)
                 if all([not x[0].isalnum() for x in samp_names]):
                     if all([x[0]=='-' for x in samp_names]):
                         nc = int(2)

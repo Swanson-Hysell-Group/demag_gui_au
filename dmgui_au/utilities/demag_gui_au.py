@@ -6,7 +6,8 @@ import sys
 # import signal
 import textwrap
 # import pdb
-import programs.demag_gui as dgl
+# import programs.demag_gui as dgl
+from programs import demag_gui as dgl
 import programs.conversion_scripts2.cit_magic2 as cit_magic2
 import programs.conversion_scripts.cit_magic as cit_magic
 from pmagpy import convert_2_magic as convert
@@ -21,7 +22,7 @@ import wx.adv
 from functools import reduce
 import pmagpy.pmag as pmag
 from funcs import shortpath, cache_site_files, uncache_site_files
-
+from dmg_au_utils import *
 try:  # get path names if set
     from dmgui_au import pkg_dir, data_dir, data_src, inp_dir
     usr_configs_read = True
@@ -31,91 +32,14 @@ except ImportError:
         print("-W- Local path names have not been set. Please run setup.py")
     usr_configs_read = False
 
-global CURRENT_VERSION
 CURRENT_VERSION = pmag.get_version()
-
-
-class bcolors:
-    HEADER = '\033[95m'
-    OKBLUE = '\033[94m'
-    OKGREEN = '\033[92m'
-    WARNING = '\033[93m'
-    FAIL = '\033[91m'
-    ENDC = '\033[0m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
-
-
-class Logger(object):
-    """
-    log stdout to debug_inp.log
-    """
-
-    def __init__(self, clr_output=True):
-        global usr_configs_read, data_dir
-        self.clr_output = clr_output
-        self.terminal = sys.stdout
-        log_file = "demag_gui_au.log"
-        if usr_configs_read:
-            log_file = os.path.join(data_dir, log_file)
-        self.log = open(log_file, "a+")
-        self.log.write(
-            '\n{:-^80}\n\n'.format('  Starting session at {}  '.format(asctime())))
-
-    def write(self, message):
-        if self.clr_output:
-            if '-I-' in str(message):
-                if 'Timer' in str(message):
-                    self.terminal.write(bcolors.OKBLUE)
-                else:
-                    self.terminal.write(bcolors.OKGREEN)
-            elif '-W-' in str(message):
-                self.terminal.write(bcolors.WARNING)
-            elif '-E-' in str(message):
-                self.terminal.write(bcolors.FAIL)
-        self.terminal.write(message)
-        if self.clr_output:
-            self.terminal.write(bcolors.ENDC)
-        self.log.write(message)
-
-    def flush(self):
-        # this flush method is needed for python 3 compatibility.
-        # this handles the flush command by doing nothing.
-        # you might want to specify some extra behavior here.
-        pass
-
-    # def cut_info_stmts(self):
-    #     if not self.log.close():
-    #         reopen_log = True
-    #         self.log.close()
-    #     else:
-    #         reopen_log = False
-    #     lines = open('demag_gui_au.log').readlines()
-    #     stmt_flags = ['-I-','Closing']
-    #     to_save = [i for i, l in enumerate(lines) if not any(
-    #         [fg in l for fg in stmt_flags])]
-    #     newlogl = [lines[s] for s in to_save]
-    #     newlog = open("demag_gui_au.log", "w+")
-    #     if reopen_log:
-    #         self.log = open("demag_gui_au.log", "a+")
-
-
-def start_logger():
-    sys.stdout = Logger()
-    # sys.stdout.cut_info_stmts()
-
-
-def stop_logger():
-    sys.stdout.log.write('{:-^80}\n'.format('  Closing session  '))
-    sys.stdout.log.close()
-    sys.stdout = sys.__stdout__
 
 
 class Demag_GUIAU(dgl.Demag_GUI):
 
     def __init__(self, WD=None, write_to_log_file=True, inp_file=None,
                  delay_time=3, data_model=3.0, test_mode_on=True):
-        global usr_configs_read, inp_dir, pkg_dir, data_dir
+        global usr_configs_read, inp_dir, pkg_dir, data_dir, CURRENT_VERSION
         # catch user interruption signal (ctrl+c) so app can still close properly
         # not working right now
         # signal.signal(signal.SIGINT, self.sigint_catcher)
@@ -240,6 +164,8 @@ class Demag_GUIAU(dgl.Demag_GUI):
         """
         add buttons to toggle timer and to stream from main data directory (Dropbox)
         """
+        self.top_bar_sizer = self.panel.GetSizer()
+        self.top_bar_h_space = 10
         au_status_sizer = wx.StaticBoxSizer(wx.StaticBox(self.panel,
                                                          wx.ID_ANY,
                                                          "Autoupdate Status"),
@@ -247,7 +173,8 @@ class Demag_GUIAU(dgl.Demag_GUI):
         self.au_status_button = wx.ToggleButton(self.panel, id=wx.ID_ANY,
                                                 size=(100*self.GUI_RESOLUTION, 25))
         self.au_status_button.SetValue(True)
-        self.au_status_button.SetLabelMarkup("<span foreground='green'><b>{}</b></span>".format("Running"))
+        self.au_status_button.SetLabelMarkup("<span foreground='green'><b>" +
+                                             "{}</b></span>".format("Running"))
         self.go_live = wx.ToggleButton(self.panel, id=wx.ID_ANY, label='Go Live',
                                        size=(100*self.GUI_RESOLUTION, 25))
         au_status_btn_sizer = wx.GridSizer(2, 1, 10, 0)
@@ -291,24 +218,25 @@ class Demag_GUIAU(dgl.Demag_GUI):
     # def shortpath(abspath):
     #     return abspath.replace(os.path.expanduser('~') + os.sep, '~/', 1)
 
-    @staticmethod
-    def delete_magic_files(self, WD, data_model=3.0):
-        compiled_file_names = [
-            'measurements.txt',
-            'specimens.txt',
-            'samples.txt',
-            'sites.txt',
-            'locations.txt',
-            'contribution.txt',
-            'criteria.txt',
-            'ages.txt',
-            'images.txt',
-            '.magic']
-        wd_files = list(filter(os.path.isfile, map(lambda x: os.path.join(wd,x),os.listdir(wd))))
-        mfiles = list(filter(lambda x: any([str(x).endswith(fname) for fname in compiled_file_names]),wd_files))
-        for mfile in compiled_file_names:
-            os.remove(os.path.relpath(mfile))
-            print("-I- Removing %s" % (os.path.relpath(mfile)))
+    # @staticmethod
+    # def delete_magic_files(self, WD, data_model=3.0):
+    #     compiled_file_names = [
+    #         'measurements.txt',
+    #         'specimens.txt',
+    #         'samples.txt',
+    #         'sites.txt',
+    #         'locations.txt',
+    #         'contribution.txt',
+    #         'criteria.txt',
+    #         'ages.txt',
+    #         'images.txt',
+    #         '.magic']
+    #     wd_files = list(filter(os.path.isfile, map(lambda x: os.path.join(WD, x),
+    #                                                os.listdir(WD))))
+    #     mfiles = list(filter(lambda x: any([str(x).endswith(fname) for fname in compiled_file_names]),wd_files))
+    #     for mfile in compiled_file_names:
+    #         os.remove(os.path.relpath(mfile))
+    #         print("-I- Removing %s" % (os.path.relpath(mfile)))
 
     # @staticmethod
     # def clr_output(raw_str):
@@ -1041,9 +969,6 @@ def start(WD=None, inp_file=None, delay_time=1, vocal=False, data_model=3):
 
 def main():
     kwargs = {}
-    if any(x in sys.argv for x in ["-h", "--help"]):
-        help(dgl)
-        sys.exit()
     global data_dir, usr_configs_read
     if usr_configs_read:
         print('-I- Successfully read in user configs and local paths')
@@ -1077,13 +1002,31 @@ def main():
         dm_index = sys.argv.index("--data_model")
         kwargs['data_model'] = sys.argv[dm_index+1]
 
-    # start logger
-    start_logger()
-    # start application
     start(**kwargs)
+    # start logger
+    # start_logger(usr_configs_read, inp_dir, pkg_dir, data_dir)
+    # log_file = "demag_gui_au.log"
+    # if usr_configs_read:
+    #     log_file = os.path.join(data_dir, log_file)
+    # else:
+    #     log_file = os.path.join('.', log_file)
+    # with loggercontext(log_file, quiet=False):
+    #     # start application
+    # start(**kwargs)
     # stop logger
-    stop_logger()
+    # stop_logger()
 
 
 if __name__ == "__main__":
-    main()
+    if any(x in sys.argv for x in ["-h", "--help"]):
+        help(dgl)
+        sys.exit()
+    log_file = "demag_gui_au.log"
+    if usr_configs_read:
+        log_file = os.path.join(data_dir, log_file)
+    else:
+        log_file = os.path.join('.', log_file)
+    with loggercontext(log_file, quiet=False):
+        # start application
+        main()
+    # main()
