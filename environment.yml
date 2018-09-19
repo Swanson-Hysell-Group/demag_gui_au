@@ -1,6 +1,4 @@
 name: dmguiau
-channels:
-  - defaults
 dependencies:
   - ca-certificates=2018.03.07=0
   - certifi=2018.8.24=py36_1
@@ -35,5 +33,4 @@ dependencies:
     - scripttest==1.3
     - six==1.11.0
     - wxpython==4.0.3
-prefix: /Users/lukefairchild765/anaconda/envs/dmguiau
 
