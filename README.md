@@ -16,6 +16,9 @@ formats) in a similar way.
 - [PmagPy](https://github.com/PmagPy/PmagPy)\
 Instructions on how to download PmagPy can be found [here](https://github.com/PmagPy/PmagPy#how-to-get-it).
 
+<!---
+THE FOLLOWING APPLIES TO THE 'DEV' BRANCH ONLY!
+
 > **Important:** Some features of DemagGUI AU that are in active development might rely on small tweaks to
 > `demag_gui.py` that have not yet been integrated into PmagPy or are not included in the latest
 > release. To ensure compatibility between this code and your installation of PmagPy, I would
@@ -25,7 +28,6 @@ Instructions on how to download PmagPy can be found [here](https://github.com/Pm
 > DemagGUI AU---the master branch should work on the latest PmagPy release.)
 
 
-<!---
 \
 To download and use this fork (specifically the `au` branch), navigate to a directory of your choosing and enter the following on the command
 line:
@@ -46,15 +48,15 @@ line:
 Clone or fork this repository and download to your computer. 
 
 Add the following lines to your `~/.profile` or `~/.bash_profile`
-```
+```bash
 PATH=<path/to>/demag_gui_au:./:$PATH
 PYTHONPATH=<path/to>/demag_gui_au:./:$PYTHONPATH
 PATH=<path/to>/demag_gui_au/dmgui_au/utilities:./:$PATH
 PYTHONPATH=<path/to>/demag_gui_au/dmgui_au/utilities:./:$PYTHONPATH
 ```
 Navigate to the top directory `demag_gui_au` to run the setup script.
-```python
-python setup.py
+```bash
+$ python setup.py
 ```
 The program is interactive and will ask you to input the path to the main directory you would like
 it to source data from. If this directory is located within your Dropbox folder (attn: UC Berkeley
@@ -63,8 +65,8 @@ folder, this should narrow its search sufficiently such that no user input is ne
 >For UC Berkeley folks, the script should automatically recognize the `Hargraves_Data` folder as the
 top-level directory (if this is on your computer). 
 
-```python
-python setup.py dropbox
+```bash
+$ python setup.py dropbox
 ```
 Run `python setup.py -h` to see more options and documentation of the setup script.
 
@@ -80,7 +82,7 @@ them to the folder `data/inp_files/`.
 If setup finishes successfully and you have configured your PATH correctly as outlined above, the
 directory structure of the DemagGUI AU repository should now look something like this: 
 
-```
+```bash
 demag_gui_au/
 ├── README.md
 ├── data/
