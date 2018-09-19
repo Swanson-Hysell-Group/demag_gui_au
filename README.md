@@ -110,7 +110,7 @@ The `debug_inp.py` module is a command line tool that allows for the identificat
 correction of common errors within .inp files. 
 
 Run the following on the command line to learn more:
-```python
+```bash
 $ python debug_inp.py -h
 ```
 
